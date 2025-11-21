@@ -1,25 +1,14 @@
-from typing import Any, Dict
 from datetime import datetime
+from typing import Any, Dict
+
 from pandas import read_sql_query
 
 
-class Clientes:
+class InsertClientes:
     def __init__(self, db):
         self.db = db
         self.cursor = self.db.get_cursor()
         self.c_engine = db.conn_engine()
-
-    def get_clientes_mikrowisp(self):
-        """Obtiene todos los clientes de Mikrowisp."""
-        query = "SELECT * FROM usuarios"
-        return read_sql_query(query, self.c_engine)
-
-    def get_id_cliente_by_codigo(self, codigo_cliente: str) -> Any:
-        """Obtiene el ID del cliente por su código."""
-        sql = "SELECT id FROM usuarios WHERE codigo_cliente = {}"
-        cur = self.db.execute(sql, (codigo_cliente,))
-        row = cur.fetchone()
-        return row["id"] if row else None
 
     def create_clientes(self, data) -> int:
         """Inserta un nuevo cliente. Devuelve cantidad de filas afectadas (si el conector lo soporta)."""
@@ -166,6 +155,8 @@ if __name__ == "__main__":
 
     from dotenv import load_dotenv
 
+    from data.clients.clientes_mikrowisp import Clientes
+
     sys.path.append("../conexiones")
 
     from conn.database_connector import DatabaseConnector
@@ -187,6 +178,7 @@ if __name__ == "__main__":
     mysql_connector.connect()
     db = DatabaseConnector(mysql_connector)
     db.autocommit(False)
+    oInsertClientes = InsertClientes(db=db)
     oClientes = Clientes(db=db)
     # print(oClientes.get_clientes_mikrowisp())
     safe1 = []
@@ -204,7 +196,7 @@ if __name__ == "__main__":
         "direccion_principal": "Calle Falsa 123",
         "codigo_cliente": "CL999",
     }
-    safe1.append(oClientes.normalize_payload_cliente(payload_cliente1))
+    safe1.append(oInsertClientes.normalize_payload_cliente(payload_cliente1))
     payload_cliente2 = {
         "nombre": "PRUEBA2",
         "estado": "ACTIVO",
@@ -217,8 +209,8 @@ if __name__ == "__main__":
         "direccion_principal": "Calle Falsa 123",
         "codigo_cliente": "CL1000",
     }
-    safe1.append(oClientes.normalize_payload_cliente(payload_cliente2))
-    rows_count_clientes = oClientes.create_clientes(safe1)
+    safe1.append(oInsertClientes.normalize_payload_cliente(payload_cliente2))
+    rows_count_clientes = oInsertClientes.create_clientes(safe1)
     print(f"filas afectadas: {rows_count_clientes}")
     if rows_count_clientes:
         # Confirmar clientes insertados, ahora se pueden insertar las notificaciones
@@ -265,10 +257,10 @@ if __name__ == "__main__":
                 "empresa_afip": 1,
             }
             safe2.append(
-                oClientes.normalize_payload_notificaciones(payload_notificaciones)
+                oInsertClientes.normalize_payload_notificaciones(payload_notificaciones)
             )
 
-        rows_count_notificaciones = oClientes.create_notificaciones(safe2)
+        rows_count_notificaciones = oInsertClientes.create_notificaciones(safe2)
         if rows_count_notificaciones:
             print(f"filas afectadas en notificaciones: {rows_count_notificaciones}")
             db.commit()
