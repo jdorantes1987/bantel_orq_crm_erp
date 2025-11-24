@@ -12,7 +12,7 @@ class ClientesMonitoreoProfit:
     def obtener_clientes_activos(self):
         """Obtiene una lista de clientes activos."""
         data = self.oClientes.get_clientes_profit()
-        return data[(data["inactivo"] == 0) & (data["tipo_adi"] <= 2)]
+        return data[data["inactivo"] == 0]
 
 
 if __name__ == "__main__":

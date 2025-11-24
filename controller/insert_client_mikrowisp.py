@@ -153,7 +153,7 @@ if __name__ == "__main__":
 
     from dotenv import load_dotenv
 
-    from data.clients.clientes_mikrowisp import Clientes
+    from clients.clientes_mikrowisp import Clientes
 
     sys.path.append("../conexiones")
 

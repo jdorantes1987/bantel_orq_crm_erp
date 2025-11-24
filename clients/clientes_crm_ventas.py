@@ -50,7 +50,7 @@ class ClientesCRM:
                         INNER JOIN entity_email_address AS entity_email_address_1
                                 ON contact.id = entity_email_address_1.entity_id)
                     INNER JOIN email_address AS email_address_1
-                            ON entity_email_address_1.email_address_id = email_address_1.id; 
+                            ON entity_email_address_1.email_address_id = email_address_1.id;
                 """
         return read_sql_query(query, self.c_engine)
 
