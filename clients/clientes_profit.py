@@ -44,6 +44,7 @@ if __name__ == "__main__":
 
     # Conexión a la base de datos de la derecha
     sqlserver_connector = SQLServerConnector(**db_credentials)
+    sqlserver_connector.connect()
     db_derecha = DatabaseConnector(sqlserver_connector)
     oClientesMonitoreo = ClientesMonitoreoProfit(db_derecha)
     clientes_derecha = oClientesMonitoreo.obtener_clientes_activos()

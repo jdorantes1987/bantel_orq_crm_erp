@@ -1,8 +1,6 @@
 from datetime import datetime
 from typing import Any, Dict
 
-from pandas import read_sql_query
-
 
 class InsertClientes:
     def __init__(self, db):
