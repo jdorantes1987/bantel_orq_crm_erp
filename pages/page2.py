@@ -24,19 +24,27 @@ for key, default in [
         st.session_state[key] = default
 
 
+@st.cache_data
 def add_clientes_en_profit(data):
-    clientes_count_rows = 0
+    derecha_count_rows = 0
+    izquierda_count_rows = 0
     # Procesa los clientes seleccionados: separar por módulo y hacer el envío
     # Nota: no usar caché aquí porque la función realiza efectos secundarios
-    derecha = data[(data["sel"]) & (data["m_pago"] == "Factura")].copy()
+    seleted = data[(data["sel"])].copy()
     oClienteCRM = ClientesCRM(db=st.session_state.conexion_crm)
-    if not derecha.empty:
-        safe1 = []
+    if not seleted.empty:
+        safe_derecha = []
+        safe_izquierda = []
         updates = []
         oClientesDerecha = Clientes(db=st.session_state.conexion_facturas)
-        for index, row in derecha.iterrows():
+        oClientesIzquierda = Clientes(db=st.session_state.conexion_recibos)
+        for index, row in seleted.iterrows():
+            # Especificar código según módulo
+            codigo = (
+                row["r_i_f"] if row["m_pago"] == "Factura" else row["codigo_cliente"]
+            )
             payload_cliente = {
-                "co_cli": row["r_i_f"],
+                "co_cli": codigo,
                 "tip_cli": "01",
                 "cli_des": row["empresa"] if row["empresa"] else row["name"],
                 "inactivo": 0,
@@ -77,27 +85,46 @@ def add_clientes_en_profit(data):
                 "co_us_mo": "JACK",
                 "co_sucu_mo": "01",
             }
-            safe1.append(oClientesDerecha.normalize_payload_cliente(payload_cliente))
+
+            # Separar por módulo
+            if row["m_pago"] == "Factura":
+                # Preparar datos para módulo de facturas
+                safe_derecha.append(
+                    oClientesDerecha.normalize_payload_cliente(payload_cliente)
+                )
+            else:
+                # Preparar datos para módulo de recibos
+                safe_izquierda.append(
+                    oClientesIzquierda.normalize_payload_cliente(payload_cliente)
+                )
+
             st.toast(f"Cliente agregado:{row['r_i_f']} - {row['empresa']}", icon="✅")
+
+            # Prepara los datos para actualizar en CRM
             item = {
                 "id": row["id"],
                 "codigo_cliente": row["r_i_f"],
             }
             updates.append(item)
 
-        clientes_count_rows = oClientesDerecha.create_clientes(safe1)
-        if clientes_count_rows:
+        # Crear clientes en la base de datos
+        derecha_count_rows = oClientesDerecha.create_clientes(safe_derecha)
+        izquierda_count_rows = oClientesIzquierda.create_clientes(safe_izquierda)
+
+        # Confirmar si ambas inserciones fueron exitosas
+        if derecha_count_rows and izquierda_count_rows:
             st.session_state.conexion_facturas.commit()
+            st.session_state.conexion_recibos.commit()
             oClienteCRM.update_clientes(updates)
             st.session_state.conexion_crm.commit()
         else:
             st.session_state.conexion_facturas.rollback()
+            st.session_state.conexion_recibos.rollback()
 
-    izquierda = data[(data["sel"]) & (data["m_pago"] == "Recibo")].copy()
-    # Aquí iría la lógica real de inserción en Profit
+    # Retorna la cantidad de filas procesadas
     return {
-        "derecha_count": clientes_count_rows,
-        "izquierda_count": len(izquierda),
+        "derecha_count": derecha_count_rows,
+        "izquierda_count": izquierda_count_rows,
     }
 
 

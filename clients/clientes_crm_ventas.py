@@ -228,8 +228,8 @@ if __name__ == "__main__":
     # print(oClientesCRM.obtener_clientes())
     oClientesCRM.update_clientes(
         {
-            "id": "691e1148a93479aa1",
-            "codigo_cliente": "  ",
+            "id": "6924aaf28d554fbb8",
+            "r_i_f": " ",
         }
     )
     print("Cliente(s) actualizado(s).")
