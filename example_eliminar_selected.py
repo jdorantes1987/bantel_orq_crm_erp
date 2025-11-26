@@ -32,7 +32,7 @@ df_editado = st.data_editor(
 # 3. Botón para aplicar la eliminación
 if st.button("Eliminar Seleccionados", type="primary"):
     # Filtramos: Nos quedamos solo con las filas donde 'Eliminar' es False
-    filas_a_mantener = df_editado[df_editado["Eliminar"] == False]
+    filas_a_mantener = df_editado[~df_editado["Eliminar"]]
 
     # 4. Actualizamos el session_state
     # Es vital resetear la columna 'Eliminar' a False en los datos restantes
