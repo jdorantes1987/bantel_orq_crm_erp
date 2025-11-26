@@ -1,24 +1,21 @@
 import os
 import sys
-from time import sleep
 
 import streamlit as st
+from dotenv import load_dotenv
 
-# from dotenv import load_dotenv
+from controller.sync_clientes import SyncClientes
 
-# from domain.edo_cta import EdoCta
-# from sheets.bcv_sheet import HistBCVSheet
+sys.path.append("../authenticator")
+sys.path.append("../profit")
+sys.path.append("../conexiones")
 
-# sys.path.append("../authenticator")
-# sys.path.append("../profit")
-# sys.path.append("../conexiones")
-
-# from auth import AuthManager  # noqa: E402
-# from conn.database_connector import DatabaseConnector  # noqa: E402
-# from conn.sql_server_connector import SQLServerConnector  # noqa: E402
-# from data.mod.ventas.pedidos import Pedidos  # noqa: E402
-# from manager_sheet import ManagerSheet  # noqa: E402
-# from role_manager_db import RoleManagerDB  # noqa: E402
+from auth import AuthManager  # noqa: E402
+from conn.database_connector import DatabaseConnector  # noqa: E402
+from conn.sql_server_connector import SQLServerConnector  # noqa: E402
+from conn.mysql_connector import MySQLConnector  # noqa: E402
+from role_manager_db import RoleManagerDB  # noqa: E402
+from data.mod.ventas.tabuladorISLR import TabuladorISLR  # noqa: E402
 
 # Configuración de página con fondo personalizado
 st.set_page_config(
@@ -28,70 +25,121 @@ st.set_page_config(
     page_icon="",
 )
 
-MENU_INICIO = "pages/page1.py"
+MENU_INICIO = "pages/page2.py"
 
 # st.title("Inicio de sesión")
 
 # Cargar las claves de session si no existen
-# for key, default in [
-#     ("stage", 0),
-#     ("conexion", None),
-#     ("auth_manager", None),
-#     ("role_manager", None),
-#     ("logged_in", False),
-#     ("user", ""),
-#     ("cod_client", None),
-# ]:
-#     if key not in st.session_state:
-#         st.session_state[key] = default
+for key, default in [
+    ("stage", 0),
+    ("conexion", None),
+    ("auth_manager", None),
+    ("role_manager", None),
+    ("logged_in", False),
+    ("user", ""),
+    ("cod_client", None),
+]:
+    if key not in st.session_state:
+        st.session_state[key] = default
 
 
-# def set_stage(i):
-#     st.session_state.stage = i
+def set_stage(i):
+    st.session_state.stage = i
 
 
-# if st.session_state.stage == 0:
-#     st.session_state.password = ""
-#     env_path = os.path.join("../conexiones", ".env")
-#     load_dotenv(
-#         dotenv_path=env_path,
-#         override=True,
-#     )  # Recarga las variables de entorno desde el archivo
+if st.session_state.stage == 0:
+    st.session_state.password = ""
+    env_path = os.path.join("../conexiones", ".env")
+    load_dotenv(
+        dotenv_path=env_path,
+        override=True,
+    )  # Recarga las variables de entorno desde el archivo
 
-#     # Para SQL Server
-#     db_credentials = {
-#         "host": os.getenv("HOST_PRODUCCION_PROFIT"),
-#         "database": os.getenv("DB_NAME_DERECHA_PROFIT"),
-#         "user": os.getenv("DB_USER_PROFIT"),
-#         "password": os.getenv("DB_PASSWORD_PROFIT"),
-#     }
-#     sqlserver_connector = SQLServerConnector(**db_credentials)
+    # Para SQL Server
+    db_credentials = {
+        "host": os.getenv("HOST_PRODUCCION_PROFIT"),
+        "database": os.getenv("DB_NAME_DERECHA_PROFIT"),
+        "user": os.getenv("DB_USER_PROFIT"),
+        "password": os.getenv("DB_PASSWORD_PROFIT"),
+    }
+    sqlserver_connector_fact = SQLServerConnector(**db_credentials)
+    try:
+        # Conexión a la base de datos de la derecha
+        sqlserver_connector_fact.connect()
+        st.session_state.conexion_facturas = DatabaseConnector(sqlserver_connector_fact)
+        st.session_state.conexion_facturas.autocommit(False)
 
-#     credentials_hist_bcv = {
-#         "file_sheet_name": os.getenv("FILE_HISTORICO_TASAS_BCV_NAME"),
-#         "spreadsheet_id": os.getenv("HISTORICO_TASAS_BCV_ID"),
-#         "credentials_file": os.getenv("HISTORICO_TASAS_BCV_CREDENTIALS"),
-#     }
-#     oManagerSheet = ManagerSheet(**credentials_hist_bcv)
-#     oHistBCVSheet = HistBCVSheet(oManagerSheet)
-#     st.session_state.tasa_today = oHistBCVSheet.get_tasa_today()
+        # Conexión a la base de datos de la izquierda
+        db_credentials["database"] = os.getenv("DB_NAME_IZQUIERDA_PROFIT")
+        sqlserver_connector_recibos = SQLServerConnector(**db_credentials)
+        sqlserver_connector_recibos.connect()
+        st.session_state.conexion_recibos = DatabaseConnector(
+            sqlserver_connector_recibos
+        )
+        st.session_state.conexion_recibos.autocommit(False)
 
-#     try:
-#         sqlserver_connector.connect()
-#     except Exception as e:
-#         st.error(f"No se pudo conectar a la base de datos: {e}")
-#         st.stop()
-#     # Almacenar la conexión
-#     st.session_state.conexion = DatabaseConnector(sqlserver_connector)
-#     # Almacenar el gestor de autenticación en session_state
-#     st.session_state.auth_manager = AuthManager(st.session_state.conexion)
-#     st.session_state.role_manager = RoleManagerDB(st.session_state.conexion)
-#     st.session_state.pedidos = Pedidos(st.session_state.conexion)
-#     st.session_state.edo_cta = EdoCta(
-#         st.session_state.conexion,
-#         st.session_state.pedidos,
-#     )
-#     set_stage(1)
+        # Conexión a MySql CRM Ventas
+        mysql_connector = MySQLConnector(
+            host=os.environ["HOST_PRODUCCION_CRM_VENTAS"],
+            database=os.environ["DB_NAME_CRM_VENTAS"],
+            user=os.environ["DB_USER_CRM_VENTAS"],
+            password=os.environ["DB_PASSWORD_CRM_VENTAS"],
+        )
+        mysql_connector.connect()
+        st.session_state.conexion_crm = DatabaseConnector(mysql_connector)
+        st.session_state.conexion_crm.autocommit(False)
+
+        # Conexión a MySql Mikrowisp
+        mysql_connector = MySQLConnector(
+            host=os.environ["HOST_PRODUCCION_MKWSP"],
+            database=os.environ["DB_NAME_MKWSP"],
+            user=os.environ["DB_USER_MKWSP"],
+            password=os.environ["DB_PASSWORD_MKWSP"],
+        )
+        mysql_connector.connect()
+        st.session_state.conexion_mw = DatabaseConnector(mysql_connector)
+
+        # Instanciar TabuladorISLR
+        oTab = TabuladorISLR(st.session_state.conexion_facturas)
+        tab = oTab.get_tabulador()
+        if tab:
+            # Obtener solo las claves co_tab y tab_des
+            keys = [(d["co_tab"], d["tab_des"]) for d in tab] if tab else []
+            # separar por comas los valores de cada tupla
+            st.session_state.lista_tab = [" | ".join(map(str, t)) for t in keys]
+
+        # Crear lista de tipos de persona
+        st.session_state.list_tipo_persona = [
+            "1 | Natural Residente",
+            "2 | Natural No Residente",
+            "3 | Juridica Domiciliada",
+            "4 | Juridica No Domiciliada",
+            "5 | Exenta",
+            "6 | Tesoreria Nacional",
+            "7 | Otros",
+            "8 | Otros 2 (fijo=TPE)",
+        ]
+
+        # Crear lista de clasificacion de clientes
+        st.session_state.list_clasificacion = [
+            "1 | Normal",
+            "2 | Casa Matriz",
+            "3 | Sucursal",
+        ]
+
+        # Instanciar SyncClientes
+        st.session_state.o_sync_clientes = SyncClientes(
+            db_crm=st.session_state.conexion_crm,
+            db_mikrowisp=st.session_state.conexion_mw,
+            db_profit_fact=st.session_state.conexion_facturas,
+            db_profit_recibos=st.session_state.conexion_recibos,
+        )
+
+    except Exception as e:
+        st.error(f"No se pudo conectar a la base de datos: {e}")
+        st.stop()
+
+    set_stage(1)
 
 
 # def existe_user(username):

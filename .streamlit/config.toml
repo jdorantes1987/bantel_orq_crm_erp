@@ -6,4 +6,7 @@ primaryColor="#4170f2"
 backgroundColor="#2C323C"
 secondaryBackgroundColor="#22252A"
 textColor="#f0f0f0"
-font="monospace"
+
+# Widgets
+borderColor = "#767171"
+

@@ -1,3 +1,5 @@
+from typing import Any, Dict
+
 from pandas import read_sql_query
 
 
@@ -19,6 +21,7 @@ class ClientesCRM:
                     account.coordenadas_g_p_s,
                     account.r_i_f,
                     account.cedula,
+                    account.created_at,
                     contact.tipo_de_contacto,
                     contact.first_name,
                     contact.last_name,
@@ -54,6 +57,145 @@ class ClientesCRM:
                 """
         return read_sql_query(query, self.c_engine)
 
+    def update_clientes(self, data) -> int:
+        """Actualiza uno o varios clientes.
+
+        data puede ser un dict (una fila) o un iterable de dicts. Cada fila debe contener
+        la clave primaria 'id' para identificar el registro. Devuelve la cantidad
+        total de filas afectadas (o estimada si el conector no reporta rowcount).
+        """
+        # Normalizar a lista de filas
+        rows = [data] if isinstance(data, dict) else list(data)
+        if not rows:
+            return 0
+
+        # Aplicar normalización básica a cada payload (fechas, campos vacíos, etc.)
+        rows = [self.normalize_payload_cliente(r) for r in rows]
+
+        # Filtrar filas válidas y preparar columnas a actualizar (excluir id)
+        prepared = []  # list of (row_dict, set_columns)
+        for r in rows:
+            id = r.get("id")
+            if not id:
+                # omitimos filas sin clave primaria
+                continue
+            set_cols = [k for k in r.keys() if k != "id"]
+            if not set_cols:
+                # nada que actualizar
+                continue
+            prepared.append((r, set_cols))
+
+        if not prepared:
+            return 0
+
+        # Agrupar por conjunto de columnas a actualizar para poder usar executemany
+        groups = {}
+        for r, set_cols in prepared:
+            key = tuple(set_cols)
+            groups.setdefault(key, []).append(r)
+
+        total_affected = 0
+        try:
+            for key, group_rows in groups.items():
+                set_cols = list(key)
+                set_clause = ", ".join([f"{c} = {{}}" for c in set_cols])
+                query = f"UPDATE account SET {set_clause} WHERE id = {{}}"
+
+                params = [
+                    tuple(r.get(c) for c in set_cols) + (r.get("id"),)
+                    for r in group_rows
+                ]
+
+                self.db.executemany(query, params)
+
+                rc = getattr(self.db, "rowcount", -1)
+                if rc is None or rc < 0:
+                    total_affected += len(params)
+                else:
+                    total_affected += rc
+
+            return total_affected
+        except Exception as e:
+            print(f"Error actualizando cliente(s): {e}")
+            return 0
+
+    # Utility to map form fields to DB columns with basic defaults
+    @staticmethod
+    def normalize_payload_cliente(payload: Dict[str, Any]) -> Dict[str, Any]:
+        out = {}
+        mapping = [
+            "id",
+            "name",
+            "deleted",
+            "website",
+            "type",
+            "industry",
+            "sic_code",
+            "billing_address_street",
+            "billing_address_city",
+            "billing_address_state",
+            "billing_address_country",
+            "billing_address_postal_code",
+            "shipping_address_street",
+            "shipping_address_city",
+            "shipping_address_state",
+            "shipping_address_country",
+            "shipping_address_postal_code",
+            "description",
+            "created_at",
+            "modified_at",
+            "campaign_id",
+            "created_by_id",
+            "modified_by_id",
+            "assigned_user_id",
+            "shipping_address_avenue",
+            "shipping_address_full",
+            "modalidad_de_pago",
+            "address_street",
+            "address_city",
+            "address_state",
+            "address_country",
+            "address_postal_code",
+            "addressfact_street",
+            "addressfact_city",
+            "addressfact_state",
+            "addressfact_country",
+            "addressfact_postal_code",
+            "copyaddress_street",
+            "copyaddress_city",
+            "copyaddress_state",
+            "copyaddress_country",
+            "copyaddress_postal_code",
+            "billing_street",
+            "billing_city",
+            "billing_state",
+            "billing_country",
+            "billing_postal_code",
+            "direccion_tecnica",
+            "direccion_de_facturacion",
+            "coordenadas_g_p_s",
+            "first_name",
+            "middle_name",
+            "last_name",
+            "tipo_de_contacto",
+            "empresa",
+            "lead_id",
+            "opportunity_id",
+            "r_i_f",
+            "cedula",
+            "codigo_cliente",
+            "rifdoc_id",
+            "ceduladoc_id",
+            "m_pago",
+            "account_parent_id",
+        ]
+
+        for k in mapping:
+            if k in payload and payload[k] not in (None, ""):
+                out[k] = payload[k]
+
+        return out
+
 
 if __name__ == "__main__":
     import os
@@ -83,4 +225,13 @@ if __name__ == "__main__":
     db = DatabaseConnector(mysql_connector)
     db.autocommit(False)
     oClientesCRM = ClientesCRM(db=db)
-    print(oClientesCRM.obtener_clientes())
+    # print(oClientesCRM.obtener_clientes())
+    oClientesCRM.update_clientes(
+        {
+            "id": "691e1148a93479aa1",
+            "codigo_cliente": "  ",
+        }
+    )
+    print("Cliente(s) actualizado(s).")
+    db.autocommit(True)
+    db.close_connection()
