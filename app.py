@@ -123,8 +123,8 @@ if st.session_state.stage == 0:
         # Crear lista de clasificacion de clientes
         st.session_state.list_clasificacion = [
             "1 | Normal",
-            "2 | Casa Matriz",
-            "3 | Sucursal",
+            "2 | Revendedor",
+            "3 | Referido",
         ]
 
         # Instanciar SyncClientes
@@ -216,4 +216,9 @@ if st.session_state.stage == 0:
 #                 st.session_state.stage2 = 0
 #                 st.rerun()
 
+# Cerrar conexiones
+st.session_state.conexion_facturas.close_connection()
+st.session_state.conexion_recibos.close_connection()
+st.session_state.conexion_crm.close_connection()
+st.session_state.conexion_mw.close_connection()
 st.switch_page(MENU_INICIO)

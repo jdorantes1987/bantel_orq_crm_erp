@@ -8,7 +8,7 @@ from numpy import where
 
 # Configuración de página con fondo personalizado
 st.set_page_config(
-    page_title="Clientes por agregar",
+    page_title="Clientes por  agregar",
     layout="wide",
     initial_sidebar_state="collapsed",
     page_icon="",
@@ -23,8 +23,10 @@ for key, default in [
     if key not in st.session_state:
         st.session_state[key] = default
 
+if st.button("Refrescar"):
+    st.session_state.stage2 = 0
 
-@st.cache_data
+
 def add_clientes_en_profit(data):
     derecha_count_rows = 0
     izquierda_count_rows = 0
@@ -39,12 +41,8 @@ def add_clientes_en_profit(data):
         oClientesDerecha = Clientes(db=st.session_state.conexion_facturas)
         oClientesIzquierda = Clientes(db=st.session_state.conexion_recibos)
         for index, row in seleted.iterrows():
-            # Especificar código según módulo
-            codigo = (
-                row["r_i_f"] if row["m_pago"] == "Factura" else row["codigo_cliente"]
-            )
             payload_cliente = {
-                "co_cli": codigo,
+                "co_cli": row["codigo_cliente"],
                 "tip_cli": "01",
                 "cli_des": row["empresa"] if row["empresa"] else row["name"],
                 "inactivo": 0,
@@ -60,6 +58,8 @@ def add_clientes_en_profit(data):
                 "co_zon": "011",
                 "co_seg": "ADM",
                 "co_ven": "0001",
+                "co_pais": "VE",
+                "ciudad": "CARACAS",
                 "tipo_per": row["tip_persona"].split("|")[0],
                 "co_tab": row["tabulador_islr"].split("|")[0],
                 "desc_glob": 0,
@@ -98,8 +98,6 @@ def add_clientes_en_profit(data):
                     oClientesIzquierda.normalize_payload_cliente(payload_cliente)
                 )
 
-            st.toast(f"Cliente agregado:{row['r_i_f']} - {row['empresa']}", icon="✅")
-
             # Prepara los datos para actualizar en CRM
             item = {
                 "id": row["id"],
@@ -112,14 +110,26 @@ def add_clientes_en_profit(data):
         izquierda_count_rows = oClientesIzquierda.create_clientes(safe_izquierda)
 
         # Confirmar si ambas inserciones fueron exitosas
-        if derecha_count_rows and izquierda_count_rows:
+        if derecha_count_rows:
             st.session_state.conexion_facturas.commit()
-            st.session_state.conexion_recibos.commit()
-            oClienteCRM.update_clientes(updates)
-            st.session_state.conexion_crm.commit()
         else:
             st.session_state.conexion_facturas.rollback()
+
+        if izquierda_count_rows:
+            st.session_state.conexion_recibos.commit()
+        else:
             st.session_state.conexion_recibos.rollback()
+
+        # Actualizar CRM si hubo inserciones
+        if derecha_count_rows or izquierda_count_rows:
+            oClienteCRM.update_clientes(updates)
+            st.session_state.conexion_crm.commit()
+
+        # Cerrar conexiones
+        st.session_state.conexion_facturas.close_connection()
+        st.session_state.conexion_recibos.close_connection()
+        st.session_state.conexion_crm.close_connection()
+        st.session_state.conexion_mw.close_connection()
 
     # Retorna la cantidad de filas procesadas
     return {
@@ -165,9 +175,19 @@ if st.session_state.stage2 == 0:
 
 
 if not st.session_state.clientes_para_profit.empty:
-    st.info("Tienes clientes por agregar!")
+    st.info(
+        f" Tienes clientes por agregar: {len(st.session_state.clientes_para_profit)}",
+        icon="ℹ️",
+    )
     # Reemplazar valores NaN por cadenas vacías
     st.session_state.clientes_para_profit.fillna("", inplace=True)
+
+    # Asignar el código de cliente basado en el tipo de módulo de pago
+    st.session_state.clientes_para_profit["codigo_cliente"] = where(
+        st.session_state.clientes_para_profit["m_pago"] == "Factura",
+        st.session_state.clientes_para_profit["r_i_f"],
+        st.session_state.clientes_para_profit["cedula"],
+    )
 
     # Asignar tipo de persona Si es o no cliente jurídico
     st.session_state.clientes_para_profit["es_juridico"] = where(
@@ -291,13 +311,24 @@ if st.button(
     "Agregar clientes seleccionados en Profit",
     type="primary",
 ):
+    # Abrir conexiones
+    st.session_state.conexion_facturas._connector.connect()
+    st.session_state.conexion_recibos._connector.connect()
+    st.session_state.conexion_crm._connector.connect()
+    st.session_state.conexion_mw._connector.connect()
+
     # Procesar los seleccionados usando la versión editada
     result = add_clientes_en_profit(editor)
     filas_a_mantener = editor[~editor["sel"]]
-    st.success(
-        f"Clientes agregados exitosamente en Profit. Procesados: {result["derecha_count"]}"
-    )
-    time.sleep(0.2)
-    # Si no quieres resetearlo, simplemente asigna filas_a_mantener
-    st.session_state.clientes_para_profit = filas_a_mantener.reset_index(drop=True)
+    if result["derecha_count"] > 0 or result["izquierda_count"] > 0:
+        # Si no quieres resetearlo, simplemente asigna filas_a_mantener
+        st.session_state.clientes_para_profit = filas_a_mantener.reset_index(drop=True)
+        st.success(
+            f"Clientes agregados exitosamente en Profit. Procesados: {result['derecha_count']}, {result['izquierda_count']}",
+            icon="✅",
+        )
+    else:
+        st.warning("No se pudieron agregar clientes en Profit.", icon="⚠️")
+        time.sleep(1)
+
     st.rerun()
