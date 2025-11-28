@@ -1,4 +1,6 @@
 import sys
+from datetime import datetime
+from pandas import read_sql_query
 
 sys.path.append("../profit")
 from data.mod.ventas.clientes import Clientes  # noqa: E402
@@ -22,10 +24,12 @@ class ClientesMonitoreoProfit:
         self._last_num_cliente += 1
         return str(self._last_num_cliente).zfill(0)
 
+    # Genera el siguiente código de cliente
     def next_cod_cliente(self) -> str:
         return "CL" + self._set_numero_cliente()
 
-    def get_new_cod_cliente(self) -> str:
+    # Obtiene el último número de cliente usado y lo guarda internamente
+    def new_cod_cliente(self):
         sql = """select MAX(TRY_PARSE(SUBSTRING(co_cli,PATINDEX('%[0-9]%',co_cli),LEN(co_cli)) AS INT)) as num_co_cli
                  from saCliente
                  where tipo_adi=1
@@ -33,7 +37,16 @@ class ClientesMonitoreoProfit:
         cur = self.db.execute(sql, ())
         num_max = cur.fetchone()
         self._last_num_cliente = num_max[0] if num_max else 0
-        return self.next_cod_cliente()
+
+    def get_clients_inserted_today(self):
+        """Obtiene los clientes agregados hoy."""
+        hoy = datetime.now().strftime("%Y-%m-%d")
+        sql = """select RTRIM(co_cli) as co_cli, cli_des, fe_us_in, co_us_in
+                 from saCliente
+                 where CAST(fe_us_in AS DATE) = {}
+            """
+        result = read_sql_query(sql.format(f"'{hoy}'"), self.c_engine)
+        return result
 
 
 if __name__ == "__main__":
@@ -58,7 +71,7 @@ if __name__ == "__main__":
 
     db_credentials = {
         "host": os.getenv("HOST_PRODUCCION_PROFIT"),
-        "database": os.getenv("DB_NAME_IZQUIERDA_PROFIT"),
+        "database": os.getenv("DB_NAME_DERECHA_PROFIT"),
         "user": os.getenv("DB_USER_PROFIT"),
         "password": os.getenv("DB_PASSWORD_PROFIT"),
     }
@@ -68,10 +81,11 @@ if __name__ == "__main__":
     sqlserver_connector.connect()
     db_derecha = DatabaseConnector(sqlserver_connector)
     oClientesMonitoreo = ClientesMonitoreoProfit(db_derecha)
-    last_number = oClientesMonitoreo.get_new_cod_cliente()
-    print(last_number)
-    new_cod_cliente = oClientesMonitoreo.next_cod_cliente()
-    print(new_cod_cliente)
-    new_cod_cliente = oClientesMonitoreo.next_cod_cliente()
-    print(new_cod_cliente)
+    # oClientesMonitoreo.new_cod_cliente()
+    # new_cod_cliente = oClientesMonitoreo.next_cod_cliente()
+    # print(new_cod_cliente)
+    # new_cod_cliente = oClientesMonitoreo.next_cod_cliente()
+    # print(new_cod_cliente)
+    clientes_hoy = oClientesMonitoreo.get_clients_inserted_today()
+    print(clientes_hoy)
     db_derecha.close_connection()

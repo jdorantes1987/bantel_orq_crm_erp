@@ -1,10 +1,14 @@
 import time
 from datetime import datetime
+from functools import reduce
 
 import streamlit as st
 from data.mod.ventas.clientes import Clientes
-from clients.clientes_crm_ventas import ClientesCRM
+from pandas import concat, Index
 from numpy import where
+
+from clients.clientes_crm_ventas import ClientesCRM
+from controller.insert_client_mikrowisp import InsertClientes
 
 # Configuración de página con fondo personalizado
 st.set_page_config(
@@ -33,18 +37,40 @@ def add_clientes_en_profit(data):
     # Procesa los clientes seleccionados: separar por módulo y hacer el envío
     # Nota: no usar caché aquí porque la función realiza efectos secundarios
     seleted = data[(data["sel"])].copy()
-    oClienteCRM = ClientesCRM(db=st.session_state.conexion_crm)
+    oClientesCRM = ClientesCRM(db=st.session_state.conexion_crm)
+    oInsertClientesMW = InsertClientes(db=st.session_state.conexion_mw)
+
     if not seleted.empty:
         safe_derecha = []
         safe_izquierda = []
+        safe_MW = []
+        safe_MW_notif = []
         updates = []
         oClientesDerecha = Clientes(db=st.session_state.conexion_facturas)
         oClientesIzquierda = Clientes(db=st.session_state.conexion_recibos)
+        # Inicializar el generador de códigos de cliente de la izquierda
+        st.session_state.o_clientes_monitoreo_izquierda.new_cod_cliente()
         for index, row in seleted.iterrows():
-            payload_cliente = {
-                "co_cli": row["codigo_cliente"],
+            # Generar código de cliente según el módulo, prevee el ingreso manual de código
+            cod_cliente = (
+                # Si no hay código de cliente para la izquierda, generar uno nuevo
+                st.session_state.o_clientes_monitoreo_izquierda.next_cod_cliente()
+                if row["codigo_cliente"] == ""
+                else (
+                    row["codigo_cliente"]
+                    if row["m_pago"] == "Recibo"
+                    else row["codigo_cliente"]
+                )
+            )
+            if row["m_pago"] in ("Recibo", "Factura") and row["empresa"] == "":
+                empresa = row["name"]
+            else:
+                empresa = row["empresa"]
+
+            payload_cliente_profit = {
+                "co_cli": cod_cliente,
                 "tip_cli": "01",
-                "cli_des": row["empresa"] if row["empresa"] else row["name"],
+                "cli_des": empresa,
                 "inactivo": 0,
                 "fecha_reg": datetime.now(),
                 "direc1": row["direccion_de_facturacion"],
@@ -86,22 +112,41 @@ def add_clientes_en_profit(data):
                 "co_sucu_mo": "01",
             }
 
+            payload_cliente_MW = {
+                # "id": "",
+                "nombre": empresa,
+                "estado": "ACTIVO",
+                "correo": row["tenico_email"],
+                "telefono": row["num_tecnico"],
+                "movil": row["num_tecnico"],
+                "cedula": row["cedula"],
+                "pasarela": "s/data",
+                "codigo": "123",
+                "direccion_principal": row["direccion_tecnica"],
+                "codigo_cliente": cod_cliente,
+            }
+
+            # Preparar datos para Mikrowisp
+            safe_MW.append(
+                oInsertClientesMW.normalize_payload_cliente(payload_cliente_MW)
+            )
+
             # Separar por módulo
             if row["m_pago"] == "Factura":
                 # Preparar datos para módulo de facturas
                 safe_derecha.append(
-                    oClientesDerecha.normalize_payload_cliente(payload_cliente)
+                    oClientesDerecha.normalize_payload_cliente(payload_cliente_profit)
                 )
             else:
                 # Preparar datos para módulo de recibos
                 safe_izquierda.append(
-                    oClientesIzquierda.normalize_payload_cliente(payload_cliente)
+                    oClientesIzquierda.normalize_payload_cliente(payload_cliente_profit)
                 )
 
             # Prepara los datos para actualizar en CRM
             item = {
                 "id": row["id"],
-                "codigo_cliente": row["r_i_f"],
+                "codigo_cliente": cod_cliente,
             }
             updates.append(item)
 
@@ -120,16 +165,90 @@ def add_clientes_en_profit(data):
         else:
             st.session_state.conexion_recibos.rollback()
 
-        # Actualizar CRM si hubo inserciones
+        # Actualizar CRM e insertar en Mikrowisp si hubo inserciones
         if derecha_count_rows or izquierda_count_rows:
-            oClienteCRM.update_clientes(updates)
+            # Actualizar CRM
+            oClientesCRM.update_clientes(updates)
             st.session_state.conexion_crm.commit()
 
-        # Cerrar conexiones
-        st.session_state.conexion_facturas.close_connection()
-        st.session_state.conexion_recibos.close_connection()
-        st.session_state.conexion_crm.close_connection()
-        st.session_state.conexion_mw.close_connection()
+            # Insertar en Mikrowisp
+            rows_count_clientes = oInsertClientesMW.create_clientes(safe_MW)
+            if rows_count_clientes:
+                st.session_state.conexion_mw.commit()
+                # Recorrer los clientes insertados para crear notificaciones
+                for cliente in safe_MW:
+                    # Obtener el ID de la lista de clientes recién insertados
+                    cliente_id = (
+                        st.session_state.o_clientes_MW.get_id_cliente_by_codigo(
+                            cliente["codigo_cliente"]
+                        )
+                    )
+
+                    payload_notificaciones = {
+                        "cliente": cliente_id,
+                        "impuesto": "NADA",
+                        "chat": 0,
+                        "zona": 1,
+                        "diapago": 0,
+                        "tipopago": 1,
+                        "tipoaviso": 0,
+                        "meses": 0,
+                        "diafactura": 0,
+                        "avisopantalla": 0,
+                        "corteautomatico": 0,
+                        "avisosms": 0,
+                        "avisosms2": 0,
+                        "avisosms3": 0,
+                        "afip_condicion_iva": "Consumidor Final",
+                        "afip_condicion_venta": "Contado",
+                        "afip_automatico": 0,
+                        "avatar_color": "#04CF98",
+                        "tiporecordatorio": 0,
+                        "id_telegram": 0,
+                        "router_eliminado": 0,
+                        "otros_impuestos": 'a:3:{i:1;s:0:"";i:2;s:0:"";i:3;s:0:"";}',
+                        "isaviable": 0,
+                        "invoice_electronic": 0,
+                        "fecha_suspendido": 0,
+                        "limit_velocidad": 0,
+                        "mantenimiento": 0,
+                        "tipo_estrato": 1,
+                        "mensaje_comprobante": 0,
+                        "id_moneda": 1,
+                        "afip_enable_percepcion": 0,
+                        "fecha_registro": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "empresa_afip": 1,
+                    }
+
+                    # Normalizar y agregar a la lista de notificaciones
+                    safe_MW_notif.append(
+                        oInsertClientesMW.normalize_payload_notificaciones(
+                            payload_notificaciones
+                        )
+                    )
+
+                # Insertar notificaciones
+                rows_count_notificaciones = oInsertClientesMW.create_notificaciones(
+                    safe_MW_notif
+                )
+
+                # Confirmar o revertir según el resultado
+                if rows_count_notificaciones:
+                    print(
+                        f"filas afectadas en notificaciones: {rows_count_notificaciones}"
+                    )
+                    st.session_state.conexion_mw.commit()
+                else:
+                    print("No se insertaron notificaciones, se revierte la operación.")
+                    st.session_state.conexion_mw.rollback()
+            else:
+                st.session_state.conexion_mw.rollback()
+
+    # Cerrar conexiones
+    st.session_state.conexion_facturas.close_connection()
+    st.session_state.conexion_recibos.close_connection()
+    st.session_state.conexion_crm.close_connection()
+    st.session_state.conexion_mw.close_connection()
 
     # Retorna la cantidad de filas procesadas
     return {
@@ -186,7 +305,7 @@ if not st.session_state.clientes_para_profit.empty:
     st.session_state.clientes_para_profit["codigo_cliente"] = where(
         st.session_state.clientes_para_profit["m_pago"] == "Factura",
         st.session_state.clientes_para_profit["r_i_f"],
-        st.session_state.clientes_para_profit["cedula"],
+        "",
     )
 
     # Asignar tipo de persona Si es o no cliente jurídico
@@ -330,5 +449,42 @@ if st.button(
     else:
         st.warning("No se pudieron agregar clientes en Profit.", icon="⚠️")
         time.sleep(1)
-
+    set_stage(1)
     st.rerun()
+
+if st.session_state.stage2 == 1:
+    clients_add_today_izquierda = (
+        st.session_state.o_clientes_monitoreo_izquierda.get_clients_inserted_today()
+    )
+
+    clients_add_today_derecha = (
+        st.session_state.o_clientes_monitoreo_derecha.get_clients_inserted_today()
+    )
+    # Concatenar ambos DataFrames
+    dfs = [
+        clients_add_today_izquierda.dropna(axis=1, how="all"),
+        clients_add_today_derecha.dropna(axis=1, how="all"),
+    ]
+    # quedarnos solo con DataFrames no vacíos
+    non_empty = [df for df in dfs if not df.empty]
+
+    if non_empty:
+        # unificar columnas y reindexar cada df para evitar dtypes sorpresa
+        all_cols = reduce(
+            lambda a, b: a.union(b), (df.columns for df in non_empty), Index([])
+        )
+        combined_clients = concat(
+            [df.reindex(columns=all_cols) for df in non_empty],
+            ignore_index=True,
+            sort=False,
+        )
+        st.text("")
+        st.markdown(
+            """
+        ### ✅ Clientes agregados en Profit el día de hoy
+        """
+        )
+        st.dataframe(
+            combined_clients,
+            use_container_width=False,
+        )

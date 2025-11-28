@@ -150,7 +150,7 @@ class ClientesCRM:
             "assigned_user_id",
             "shipping_address_avenue",
             "shipping_address_full",
-            "modalidad_de_pago",
+            "m_pago",
             "address_street",
             "address_city",
             "address_state",

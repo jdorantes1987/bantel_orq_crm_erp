@@ -4,6 +4,8 @@ import sys
 import streamlit as st
 from dotenv import load_dotenv
 
+from clients.clientes_mikrowisp import Clientes
+from clients.clientes_profit import ClientesMonitoreoProfit
 from controller.sync_clientes import SyncClientes
 
 sys.path.append("../authenticator")
@@ -12,10 +14,10 @@ sys.path.append("../conexiones")
 
 from auth import AuthManager  # noqa: E402
 from conn.database_connector import DatabaseConnector  # noqa: E402
-from conn.sql_server_connector import SQLServerConnector  # noqa: E402
 from conn.mysql_connector import MySQLConnector  # noqa: E402
-from role_manager_db import RoleManagerDB  # noqa: E402
+from conn.sql_server_connector import SQLServerConnector  # noqa: E402
 from data.mod.ventas.tabuladorISLR import TabuladorISLR  # noqa: E402
+from role_manager_db import RoleManagerDB  # noqa: E402
 
 # Configuración de página con fondo personalizado
 st.set_page_config(
@@ -134,6 +136,16 @@ if st.session_state.stage == 0:
             db_profit_fact=st.session_state.conexion_facturas,
             db_profit_recibos=st.session_state.conexion_recibos,
         )
+
+        st.session_state.o_clientes_monitoreo_izquierda = ClientesMonitoreoProfit(
+            db=st.session_state.conexion_recibos
+        )
+
+        st.session_state.o_clientes_monitoreo_derecha = ClientesMonitoreoProfit(
+            db=st.session_state.conexion_facturas
+        )
+
+        st.session_state.o_clientes_MW = Clientes(db=st.session_state.conexion_mw)
 
     except Exception as e:
         st.error(f"No se pudo conectar a la base de datos: {e}")
