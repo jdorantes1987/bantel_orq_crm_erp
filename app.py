@@ -32,6 +32,29 @@ MENU_INICIO = "pages/page2.py"
 
 st.title("Inicio de sesión")
 
+
+def abrir_conexion_db():
+    # Abrir conexiones
+    st.session_state.conexion_facturas._connector.connect()
+    st.session_state.conexion_recibos._connector.connect()
+    st.session_state.conexion_crm._connector.connect()
+    st.session_state.conexion_mw._connector.connect()
+
+    # Ajustar autocommit a False para permitir transacciones
+    st.session_state.conexion_facturas.autocommit(False)
+    st.session_state.conexion_recibos.autocommit(False)
+    st.session_state.conexion_crm.autocommit(False)
+    st.session_state.conexion_mw.autocommit(False)
+
+
+def cerrar_conexion_db():
+    # Cerrar conexiones
+    st.session_state.conexion_facturas.close_connection()
+    st.session_state.conexion_recibos.close_connection()
+    st.session_state.conexion_crm.close_connection()
+    st.session_state.conexion_mw.close_connection()
+
+
 # Cargar las claves de session si no existen
 for key, default in [
     ("stage", 0),
@@ -41,6 +64,8 @@ for key, default in [
     ("logged_in", False),
     ("user", ""),
     ("cod_client", None),
+    ("open_cnn_db", abrir_conexion_db),
+    ("close_cnn_db", cerrar_conexion_db),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -68,18 +93,14 @@ if st.session_state.stage == 0:
     sqlserver_connector_fact = SQLServerConnector(**db_credentials)
     try:
         # Conexión a la base de datos de la derecha
-        sqlserver_connector_fact.connect()
         st.session_state.conexion_facturas = DatabaseConnector(sqlserver_connector_fact)
-        st.session_state.conexion_facturas.autocommit(False)
 
         # Conexión a la base de datos de la izquierda
         db_credentials["database"] = os.getenv("DB_NAME_IZQUIERDA_PROFIT")
         sqlserver_connector_recibos = SQLServerConnector(**db_credentials)
-        sqlserver_connector_recibos.connect()
         st.session_state.conexion_recibos = DatabaseConnector(
             sqlserver_connector_recibos
         )
-        st.session_state.conexion_recibos.autocommit(False)
 
         # Conexión a MySql CRM Ventas
         mysql_connector = MySQLConnector(
@@ -88,9 +109,7 @@ if st.session_state.stage == 0:
             user=os.environ["DB_USER_CRM_VENTAS"],
             password=os.environ["DB_PASSWORD_CRM_VENTAS"],
         )
-        mysql_connector.connect()
         st.session_state.conexion_crm = DatabaseConnector(mysql_connector)
-        st.session_state.conexion_crm.autocommit(False)
 
         # Conexión a MySql Mikrowisp
         mysql_connector = MySQLConnector(
@@ -99,7 +118,7 @@ if st.session_state.stage == 0:
             user=os.environ["DB_USER_MKWSP"],
             password=os.environ["DB_PASSWORD_MKWSP"],
         )
-        mysql_connector.connect()
+
         st.session_state.conexion_mw = DatabaseConnector(mysql_connector)
 
         # Almacenar el gestor de autenticación en session_state
@@ -107,6 +126,11 @@ if st.session_state.stage == 0:
         st.session_state.role_manager = RoleManagerDB(
             st.session_state.conexion_facturas
         )
+
+        # Para poblar estas listas debo abrir la conexión a la base de datos
+
+        # Abrir la conexión a la base de datos
+        st.session_state.open_cnn_db()
 
         # Instanciar TabuladorISLR
         oTab = TabuladorISLR(st.session_state.conexion_facturas)
@@ -154,6 +178,9 @@ if st.session_state.stage == 0:
 
         st.session_state.o_clientes_MW = Clientes(db=st.session_state.conexion_mw)
 
+        # Cerrar la conexión a la base de datos
+        st.session_state.close_cnn_db()
+
     except Exception as e:
         st.error(f"No se pudo conectar a la base de datos: {e}")
         st.stop()
@@ -169,12 +196,15 @@ def login(user, passw):
     return st.session_state.auth_manager.autenticar(user, passw)
 
 
-@st.cache_data(show_spinner=False)
 def iniciar_sesion(user, password):
+    # Abrir conexión a la base de datos
+    st.session_state.open_cnn_db()
     flag, msg = login(user=user, passw=password)
 
     if not flag:
+        # Si las credenciales son incorrectas
         st.toast(msg, icon="⚠️")
+        st.session_state.close_cnn_db()
     else:
         # Verificar permisos
         if st.session_state.rol_user.has_permission("Clientes", "create"):
@@ -186,17 +216,12 @@ def iniciar_sesion(user, password):
                 "cod_client_asociation"
             ]
             st.session_state.cod_client = cod_cliente
-
-            # Cerrar conexiones
-            st.session_state.conexion_facturas.close_connection()
-            st.session_state.conexion_recibos.close_connection()
-            st.session_state.conexion_crm.close_connection()
-            st.session_state.conexion_mw.close_connection()
+            st.session_state.close_cnn_db()
             st.switch_page(MENU_INICIO)
         else:
             st.error("No tienes permisos para acceder a esta aplicación.")
             del st.session_state.usuario
-            sleep(0.5)
+            sleep(0.4)
             st.session_state.logged_in = False
             set_stage(0)
             st.rerun()
@@ -207,14 +232,18 @@ if st.session_state.stage == 1:
         # Si el usuario aún no ha sido ingresado
         user = st.text_input(
             "", placeholder="Ingresa tu usuario y presiona Enter"
-        ).lower()
-        if existe_user(user):
-            st.session_state.usuario = user
-            st.success("Usuario validado!")
-            st.session_state.rol_user = (
-                st.session_state.role_manager.load_user_by_username(user)
-            )
-            st.rerun()
+        ).upper()
+        if user:
+            # Verificar si ingresó un usuario para abrir la conexión a la base de datos
+            st.session_state.open_cnn_db()
+            if existe_user(user):
+                st.session_state.usuario = user
+                st.success("Usuario validado!")
+                st.session_state.rol_user = (
+                    st.session_state.role_manager.load_user_by_username(user)
+                )
+                st.session_state.close_cnn_db()
+                st.rerun()
         else:
             if user:
                 st.error("El usuario no existe. Inténtalo de nuevo.")
