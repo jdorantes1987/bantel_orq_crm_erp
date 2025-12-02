@@ -39,7 +39,7 @@ def make_sidebar():
 # TODO Rename this here and in `make_sidebar`
 def _extracted_from_make_sidebar():
     # st.page_link("pages/page1.py", label="Inicio", icon=None)
-    st.page_link("pages/page2.py", label="Estado de cuenta", icon=None)
+    st.page_link("pages/page2.py", label="Clientes CRM", icon=None)
 
     if st.button(
         "Cerrar sesión",

@@ -4,19 +4,21 @@ from functools import reduce
 
 import streamlit as st
 from data.mod.ventas.clientes import Clientes
-from pandas import concat, Index
 from numpy import where
+from pandas import Index, concat
 
 from clients.clientes_crm_ventas import ClientesCRM
 from controller.insert_client_mikrowisp import InsertClientes
+from helpers.navigation import make_sidebar
 
 # Configuración de página con fondo personalizado
 st.set_page_config(
     page_title="Clientes por  agregar",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
     page_icon="",
 )
+make_sidebar()
 
 # Cargar las claves de session si no existen
 for key, default in [
@@ -262,7 +264,7 @@ def set_stage(i):
 
 
 """
-## Clientes por agregar
+## Clientes por agregar en PROFIT
 """
 if "o_sync_clientes" not in st.session_state:
     st.error("No se ha inicializado la sincronización de clientes.")
@@ -295,7 +297,7 @@ if st.session_state.stage2 == 0:
 
 if not st.session_state.clientes_para_profit.empty:
     st.info(
-        f" Tienes clientes por agregar: {len(st.session_state.clientes_para_profit)}",
+        f" Clientes por agregar: **{len(st.session_state.clientes_para_profit)}**",
         icon="ℹ️",
     )
     # Reemplazar valores NaN por cadenas vacías
@@ -329,128 +331,134 @@ if not st.session_state.clientes_para_profit.empty:
         str(st.session_state.lista_tab[0]),
     )
 
-
-editor = st.data_editor(
-    st.session_state.clientes_para_profit,
-    column_config={
-        "sel": st.column_config.CheckboxColumn(
-            "selec.",
-            help="Selecciona el cliente que deseas agregar.",
-            width="small",
-        ),
-        "m_pago": st.column_config.TextColumn(
-            "Módulo",
-            width="small",
-        ),
-        "codigo_cliente": st.column_config.TextColumn(
-            "Cód. Cliente",
-            width="small",
-        ),
-        "num_admin": st.column_config.TextColumn(
-            "Núm. Admin.",
-            width="small",
-        ),
-        "admin_email": st.column_config.TextColumn(
-            "Email Admin.",
-            width="medium",
-        ),
-        "es_contrib": st.column_config.CheckboxColumn(
-            "Es Contribuyente especial",
-            help="Hacer check si el cliente es un contribuyente especial.",
-            width="small",
-        ),
-        "clasif": st.column_config.SelectboxColumn(
-            "Clasif.",
-            options=st.session_state.list_clasificacion,
-            help="Seleccione la clasificación del cliente.",
-            width="small",
-        ),
-        "tip_persona": st.column_config.SelectboxColumn(
-            "Tipo Persona",
-            options=st.session_state.list_tipo_persona,
-            help="Seleccione el tipo de persona del cliente.",
-            width="medium",
-        ),
-        "es_juridico": st.column_config.CheckboxColumn(
-            "Es Jurídico",
-            help="Hacer check si el cliente es una persona jurídica.",
-            width="small",
-        ),
-        "tabulador_islr": st.column_config.SelectboxColumn(
-            "Tabulador ISLR",
-            options=(
-                st.session_state.lista_tab if "lista_tab" in st.session_state else []
+    editor = st.data_editor(
+        st.session_state.clientes_para_profit,
+        column_config={
+            "sel": st.column_config.CheckboxColumn(
+                "selec.",
+                help="Selecciona el cliente que deseas agregar.",
+                width="small",
             ),
-            help="Selecciona el tabulador de ISLR para el cliente.",
-            width="large",
-        ),
-        "empresa": st.column_config.TextColumn(
-            "Empresa",
-            width="medium",
-        ),
-        "created_at": st.column_config.DateColumn(
-            "Fecha Creación",
-            help="Fecha de creación del cliente.",
-            format="DD/MM/YYYY",
-        ),
-    },
-    hide_index=True,
-    column_order=[
-        "sel",
-        "m_pago",
-        "codigo_cliente",
-        "empresa",
-        "name",
-        "r_i_f",
-        "cedula",
-        "num_admin",
-        "admin_email",
-        "created_at",
-        "clasif",
-        "tip_persona",
-        "es_contrib",
-        "es_juridico",
-        "tabulador_islr",
-    ],
-    disabled=[
-        "m_pago",
-        "empresa",
-        "name",
-        "cli_des",
-        "r_i_f",
-        "cedula",
-        "num_admin",
-        "admin_email",
-        "created_at",
-    ],
-    use_container_width=True,
-)
+            "m_pago": st.column_config.TextColumn(
+                "Módulo",
+                width="small",
+            ),
+            "codigo_cliente": st.column_config.TextColumn(
+                "Cód. Cliente",
+                width="small",
+            ),
+            "num_admin": st.column_config.TextColumn(
+                "Núm. Admin.",
+                width="small",
+            ),
+            "admin_email": st.column_config.TextColumn(
+                "Email Admin.",
+                width="medium",
+            ),
+            "es_contrib": st.column_config.CheckboxColumn(
+                "Es Contribuyente especial",
+                help="Hacer check si el cliente es un contribuyente especial.",
+                width="small",
+            ),
+            "clasif": st.column_config.SelectboxColumn(
+                "Clasif.",
+                options=st.session_state.list_clasificacion,
+                help="Seleccione la clasificación del cliente.",
+                width="small",
+            ),
+            "tip_persona": st.column_config.SelectboxColumn(
+                "Tipo Persona",
+                options=st.session_state.list_tipo_persona,
+                help="Seleccione el tipo de persona del cliente.",
+                width="medium",
+            ),
+            "es_juridico": st.column_config.CheckboxColumn(
+                "Es Jurídico",
+                help="Hacer check si el cliente es una persona jurídica.",
+                width="small",
+            ),
+            "tabulador_islr": st.column_config.SelectboxColumn(
+                "Tabulador ISLR",
+                options=(
+                    st.session_state.lista_tab
+                    if "lista_tab" in st.session_state
+                    else []
+                ),
+                help="Selecciona el tabulador de ISLR para el cliente.",
+                width="large",
+            ),
+            "empresa": st.column_config.TextColumn(
+                "Empresa",
+                width="medium",
+            ),
+            "created_at": st.column_config.DateColumn(
+                "Fecha Creación",
+                help="Fecha de creación del cliente.",
+                format="DD/MM/YYYY",
+            ),
+        },
+        hide_index=True,
+        column_order=[
+            "sel",
+            "m_pago",
+            "codigo_cliente",
+            "empresa",
+            "name",
+            "r_i_f",
+            "cedula",
+            "num_admin",
+            "admin_email",
+            "created_at",
+            "clasif",
+            "tip_persona",
+            "es_contrib",
+            "es_juridico",
+            "tabulador_islr",
+        ],
+        disabled=[
+            "m_pago",
+            "empresa",
+            "name",
+            "cli_des",
+            "r_i_f",
+            "cedula",
+            "num_admin",
+            "admin_email",
+            "created_at",
+        ],
+        use_container_width=True,
+    )
 
-if st.button(
-    "Agregar clientes seleccionados en Profit",
-    type="primary",
-):
-    # Abrir conexiones
-    st.session_state.conexion_facturas._connector.connect()
-    st.session_state.conexion_recibos._connector.connect()
-    st.session_state.conexion_crm._connector.connect()
-    st.session_state.conexion_mw._connector.connect()
+    if st.button(
+        "Agregar clientes seleccionados",
+        type="primary",
+    ):
+        # Abrir conexiones
+        st.session_state.conexion_facturas._connector.connect()
+        st.session_state.conexion_recibos._connector.connect()
+        st.session_state.conexion_crm._connector.connect()
+        st.session_state.conexion_mw._connector.connect()
 
-    # Procesar los seleccionados usando la versión editada
-    result = add_clientes_en_profit(editor)
-    filas_a_mantener = editor[~editor["sel"]]
-    if result["derecha_count"] > 0 or result["izquierda_count"] > 0:
-        # Si no quieres resetearlo, simplemente asigna filas_a_mantener
-        st.session_state.clientes_para_profit = filas_a_mantener.reset_index(drop=True)
-        st.success(
-            f"Clientes agregados exitosamente en Profit. Procesados: {result['derecha_count']}, {result['izquierda_count']}",
-            icon="✅",
-        )
-    else:
-        st.warning("No se pudieron agregar clientes en Profit.", icon="⚠️")
-        time.sleep(1)
-    set_stage(1)
-    st.rerun()
+        # Procesar los seleccionados usando la versión editada
+        result = add_clientes_en_profit(editor)
+        filas_a_mantener = editor[~editor["sel"]]
+        if result["derecha_count"] > 0 or result["izquierda_count"] > 0:
+            # Si no quieres resetearlo, simplemente asigna filas_a_mantener
+            st.session_state.clientes_para_profit = filas_a_mantener.reset_index(
+                drop=True
+            )
+            st.success(
+                f"Clientes agregados exitosamente en Profit. Procesados: {result['derecha_count']}, {result['izquierda_count']}",
+                icon="✅",
+            )
+        else:
+            st.warning("No se pudieron agregar clientes en Profit.", icon="⚠️")
+            time.sleep(1)
+        set_stage(1)
+        st.rerun()
+else:
+    st.info("No hay clientes por agregar.", icon="ℹ️")
+
 
 if st.session_state.stage2 == 1:
     clients_add_today_izquierda = (

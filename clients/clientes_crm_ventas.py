@@ -53,7 +53,8 @@ class ClientesCRM:
                         INNER JOIN entity_email_address AS entity_email_address_1
                                 ON contact.id = entity_email_address_1.entity_id)
                     INNER JOIN email_address AS email_address_1
-                            ON entity_email_address_1.email_address_id = email_address_1.id;
+                            ON entity_email_address_1.email_address_id = email_address_1.id
+                WHERE  account.deleted = 0;
                 """
         return read_sql_query(query, self.c_engine)
 
@@ -225,13 +226,13 @@ if __name__ == "__main__":
     db = DatabaseConnector(mysql_connector)
     db.autocommit(False)
     oClientesCRM = ClientesCRM(db=db)
-    # print(oClientesCRM.obtener_clientes())
-    oClientesCRM.update_clientes(
-        {
-            "id": "6924aaf28d554fbb8",
-            "r_i_f": " ",
-        }
-    )
-    print("Cliente(s) actualizado(s).")
+    print(oClientesCRM.obtener_clientes())
+    # oClientesCRM.update_clientes(
+    #     {
+    #         "id": "6924aaf28d554fbb8",
+    #         "r_i_f": " ",
+    #     }
+    # )
+    # print("Cliente(s) actualizado(s).")
     db.autocommit(True)
     db.close_connection()
