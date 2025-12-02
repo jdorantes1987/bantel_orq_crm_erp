@@ -246,12 +246,6 @@ def add_clientes_en_profit(data):
             else:
                 st.session_state.conexion_mw.rollback()
 
-    # Cerrar conexiones
-    st.session_state.conexion_facturas.close_connection()
-    st.session_state.conexion_recibos.close_connection()
-    st.session_state.conexion_crm.close_connection()
-    st.session_state.conexion_mw.close_connection()
-
     # Retorna la cantidad de filas procesadas
     return {
         "derecha_count": derecha_count_rows,
@@ -434,10 +428,7 @@ if not st.session_state.clientes_para_profit.empty:
         type="primary",
     ):
         # Abrir conexiones
-        st.session_state.conexion_facturas._connector.connect()
-        st.session_state.conexion_recibos._connector.connect()
-        st.session_state.conexion_crm._connector.connect()
-        st.session_state.conexion_mw._connector.connect()
+        st.session_state.open_cnn_db()
 
         # Procesar los seleccionados usando la versión editada
         result = add_clientes_en_profit(editor)
@@ -454,6 +445,9 @@ if not st.session_state.clientes_para_profit.empty:
         else:
             st.warning("No se pudieron agregar clientes en Profit.", icon="⚠️")
             time.sleep(1)
+
+        # Cerrar conexiones
+        st.session_state.close_cnn_db()
         set_stage(1)
         st.rerun()
 else:

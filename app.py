@@ -211,11 +211,6 @@ def iniciar_sesion(user, password):
             st.toast(msg, icon="✅")
             st.session_state.logged_in = True
             st.session_state.user = user
-            # Obtener código de cliente asociado
-            cod_cliente = st.session_state.auth_manager.get_data_user(user)[
-                "cod_client_asociation"
-            ]
-            st.session_state.cod_client = cod_cliente
             st.session_state.close_cnn_db()
             st.switch_page(MENU_INICIO)
         else:
