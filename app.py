@@ -1,12 +1,13 @@
 import os
 import sys
-
 from time import sleep
+
 import streamlit as st
 from dotenv import load_dotenv
 
 from clients.clientes_mikrowisp import Clientes
 from clients.clientes_profit import ClientesMonitoreoProfit
+from controller.evolution_client import EvolutionClient
 from controller.sync_clientes import SyncClientes
 
 sys.path.append("../authenticator")
@@ -66,6 +67,7 @@ for key, default in [
     ("cod_client", None),
     ("open_cnn_db", abrir_conexion_db),
     ("close_cnn_db", cerrar_conexion_db),
+    ("oEvolutionClient", None),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
@@ -180,6 +182,17 @@ if st.session_state.stage == 0:
 
         # Cerrar la conexión a la base de datos
         st.session_state.close_cnn_db()
+
+        url = os.getenv("EVOLUTION_API_URL", "")
+        apikey = os.getenv("EVOLUTION_API_KEY", "")
+        instance_name = os.getenv("EVOLUTION_INSTANCE_NAME", "")
+
+        # pasar el nombre de la instancia (Alexander en tu caso)
+        st.session_state.oEvolutionClient = EvolutionClient(
+            base_url=url,
+            apikey=apikey,
+            instance_name=instance_name,
+        )
 
     except Exception as e:
         st.error(f"No se pudo conectar a la base de datos: {e}")

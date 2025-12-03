@@ -47,6 +47,7 @@ def add_clientes_en_profit(data):
         safe_izquierda = []
         safe_MW = []
         safe_MW_notif = []
+        safe_notif_client = []
         updates = []
         oClientesDerecha = Clientes(db=st.session_state.conexion_facturas)
         oClientesIzquierda = Clientes(db=st.session_state.conexion_recibos)
@@ -128,6 +129,13 @@ def add_clientes_en_profit(data):
                 "codigo_cliente": cod_cliente,
             }
 
+            # Preparar notificación para el cliente creado
+            safe_notif_client.append(
+                {
+                    "mensaje": f"Se agregó en Mikrowisp el cliente: {cod_cliente} - {empresa}",
+                }
+            )
+
             # Preparar datos para Mikrowisp
             safe_MW.append(
                 oInsertClientesMW.normalize_payload_cliente(payload_cliente_MW)
@@ -177,6 +185,7 @@ def add_clientes_en_profit(data):
             rows_count_clientes = oInsertClientesMW.create_clientes(safe_MW)
             if rows_count_clientes:
                 st.session_state.conexion_mw.commit()
+
                 # Recorrer los clientes insertados para crear notificaciones
                 for cliente in safe_MW:
                     # Obtener el ID de la lista de clientes recién insertados
@@ -245,6 +254,14 @@ def add_clientes_en_profit(data):
                     st.session_state.conexion_mw.rollback()
             else:
                 st.session_state.conexion_mw.rollback()
+
+        # Enviar notificaciones a los clientes
+        for notif in safe_notif_client:
+            st.session_state.oEvolutionClient.send_text(
+                number="584242001584",
+                text=notif["mensaje"],
+                delay=1200,
+            )
 
     # Retorna la cantidad de filas procesadas
     return {
