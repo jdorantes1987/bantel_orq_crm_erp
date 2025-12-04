@@ -30,7 +30,8 @@ class ClientesCRM:
                     phone_number_1.NUMERIC AS num_tecnico,
                     account.m_pago,
                     email_address.lower    AS admin_email,
-                    email_address_1.lower  AS tenico_email
+                    email_address_1.lower  AS tenico_email,
+                    'Cuenta'               AS apartado
                 FROM   ((((((((account
                             INNER JOIN account_contact
                                     ON account.id = account_contact.account_id)
@@ -54,24 +55,130 @@ class ClientesCRM:
                                 ON contact.id = entity_email_address_1.entity_id)
                     INNER JOIN email_address AS email_address_1
                             ON entity_email_address_1.email_address_id = email_address_1.id
-                WHERE  account.deleted = 0;
+                WHERE  account.deleted = '0'
+                UNION
+                SELECT c2.id,
+                    c2.codigo_de_cliente,
+                    c2.name,
+                    c2.direccion_de_facturacion,
+                    c2.empresa,
+                    c2.coordenadas_g_p_s,
+                    c2.r_i_f,
+                    c2.cedula,
+                    c2.created_at,
+                    c2.tipo_de_contacto,
+                    c2.first_name,
+                    c2.last_name,
+                    c2.direccion_tecnica,
+                    c2.num_admin,
+                    c2.num_tecnico,
+                    c2.m_pago,
+                    c2.admin_email,
+                    c2.tenico_email,
+                    'Referido' AS apartado
+                FROM   (SELECT r.id,
+                            r.name,
+                            r.codigo_de_cliente,
+                            c1.direccion_de_facturacion,
+                            c1.empresa,
+                            c1.coordenadas_g_p_s,
+                            c1.r_i_f,
+                            c1.cedula,
+                            c1.created_at,
+                            c1.tipo_de_contacto,
+                            c1.first_name,
+                            c1.last_name,
+                            c1.direccion_tecnica,
+                            c1.num_admin,
+                            c1.num_tecnico,
+                            c1.m_pago,
+                            c1.admin_email,
+                            c1.tenico_email
+                        FROM   referido AS r
+                            INNER JOIN account_referido AS ar
+                                    ON r.id = ar.referido_id
+                            LEFT JOIN (SELECT account.id,
+                                                account.direccion_de_facturacion,
+                                                account.empresa,
+                                                account.coordenadas_g_p_s,
+                                                account.r_i_f,
+                                                account.cedula,
+                                                account.created_at,
+                                                contact.tipo_de_contacto,
+                                                contact.first_name,
+                                                contact.last_name,
+                                                contact.direccion_tecnica,
+                                                phone_number.NUMERIC   AS num_admin,
+                                                phone_number_1.NUMERIC AS num_tecnico,
+                                                account.m_pago,
+                                                email_address.lower    AS admin_email,
+                                                email_address_1.lower  AS tenico_email
+                                        FROM   ((((((((account
+                                                        INNER JOIN account_contact
+                                                                ON account.id =
+                                                                    account_contact.account_id)
+                                                        INNER JOIN contact
+                                                                ON ( account_contact.account_id
+                                                                    =
+                                                                    contact.account_id )
+                                                                AND (
+                                                        account_contact.contact_id =
+                                                        contact.id ))
+                                                    LEFT JOIN (entity_phone_number
+                                                                LEFT JOIN phone_number
+                                                                        ON
+                    entity_phone_number.phone_number_id
+                    =
+                                                                phone_number.id)
+                                                            ON account.id =
+                    entity_phone_number.entity_id)
+                                                    INNER JOIN entity_phone_number AS
+                                                                entity_phone_number_1
+                                                            ON contact.id =
+                    entity_phone_number_1.entity_id)
+                                                    INNER JOIN phone_number AS phone_number_1
+                                                            ON
+                                                    entity_phone_number_1.phone_number_id =
+                                                    phone_number_1.id)
+                                                    INNER JOIN entity_email_address
+                                                            ON account.id =
+                    entity_email_address.entity_id)
+                                                INNER JOIN email_address
+                                                        ON
+                                                entity_email_address.email_address_id =
+                                                email_address.id)
+                                                INNER JOIN entity_email_address AS
+                                                            entity_email_address_1
+                                                        ON contact.id =
+                    entity_email_address_1.entity_id)
+                                                INNER JOIN email_address AS email_address_1
+                                                        ON
+                                                entity_email_address_1.email_address_id =
+                                                email_address_1.id
+                                        WHERE  account.deleted = '0') AS c1
+                                    ON ar.account_id = c1.id
+                        WHERE  r.deleted = 0) AS c2
                 """
         return read_sql_query(query, self.c_engine)
 
-    def update_clientes(self, data) -> int:
-        """Actualiza uno o varios clientes.
-
-        data puede ser un dict (una fila) o un iterable de dicts. Cada fila debe contener
-        la clave primaria 'id' para identificar el registro. Devuelve la cantidad
-        total de filas afectadas (o estimada si el conector no reporta rowcount).
+    def update_clientes(self, data, entity_cliente: str = "account") -> int:
+        """Actualiza uno o varios clientes en CRM Ventas.
+        Args:
+            data (Dict[str, Any] | List[Dict[str, Any]]): Datos del cliente o lista de clientes a actualizar.
+            entity_cliente (str): Tipo de entidad a actualizar ('account' o 'referidos'). Por defecto es 'account'.
+        Returns:
+            int: Cantidad de filas afectadas.
         """
         # Normalizar a lista de filas
         rows = [data] if isinstance(data, dict) else list(data)
         if not rows:
             return 0
 
-        # Aplicar normalización básica a cada payload (fechas, campos vacíos, etc.)
-        rows = [self.normalize_payload_cliente(r) for r in rows]
+        if entity_cliente == "account":
+            # Aplicar normalización básica a cada payload (fechas, campos vacíos, etc.)
+            rows = [self.normalize_payload_cliente(r) for r in rows]
+        elif entity_cliente == "referido":
+            rows = [self.normalize_payload_referido(r) for r in rows]
 
         # Filtrar filas válidas y preparar columnas a actualizar (excluir id)
         prepared = []  # list of (row_dict, set_columns)
@@ -100,7 +207,7 @@ class ClientesCRM:
             for key, group_rows in groups.items():
                 set_cols = list(key)
                 set_clause = ", ".join([f"{c} = {{}}" for c in set_cols])
-                query = f"UPDATE account SET {set_clause} WHERE id = {{}}"
+                query = f"UPDATE {entity_cliente} SET {set_clause} WHERE id = {{}}"
 
                 params = [
                     tuple(r.get(c) for c in set_cols) + (r.get("id"),)
@@ -189,6 +296,32 @@ class ClientesCRM:
             "ceduladoc_id",
             "m_pago",
             "account_parent_id",
+        ]
+
+        for k in mapping:
+            if k in payload and payload[k] not in (None, ""):
+                out[k] = payload[k]
+
+        return out
+
+    # Utility to map form fields to DB columns with basic defaults
+    @staticmethod
+    def normalize_payload_referido(payload: Dict[str, Any]) -> Dict[str, Any]:
+        out = {}
+        mapping = [
+            "id",
+            "name",
+            "deleted",
+            "description",
+            "created_at",
+            "modified_at",
+            "created_by_id",
+            "modified_by_id",
+            "assigned_user_id",
+            "codigo_de_cliente",
+            "tipo_de_servicio",
+            "capacidad_de_servicio",
+            "ubicacion",
         ]
 
         for k in mapping:

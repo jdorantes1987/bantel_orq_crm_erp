@@ -2,6 +2,7 @@ import time
 from datetime import datetime
 from functools import reduce
 
+import requests
 import streamlit as st
 from data.mod.ventas.clientes import Clientes
 from numpy import where
@@ -48,7 +49,8 @@ def add_clientes_en_profit(data):
         safe_MW = []
         safe_MW_notif = []
         safe_notif_client = []
-        updates = []
+        rows_update_account = []
+        rows_update_referido = []
         oClientesDerecha = Clientes(db=st.session_state.conexion_facturas)
         oClientesIzquierda = Clientes(db=st.session_state.conexion_recibos)
         # Inicializar el generador de códigos de cliente de la izquierda
@@ -65,7 +67,17 @@ def add_clientes_en_profit(data):
                     else row["codigo_cliente"]
                 )
             )
-            if row["m_pago"] in ("Recibo", "Factura") and row["empresa"] == "":
+
+            # Si es clasificación 2, agregar sufijo "-0" para revendedor
+            if row["clasif"].split("|")[0].strip() == "2":
+                cod_cliente = f"{cod_cliente}-0"
+
+            # Si "no hay empresa" o es "Referido", usar el nombre del cliente
+            if (
+                row["m_pago"] in ("Recibo", "Factura")
+                and row["empresa"] == ""
+                or row["apartado"] == "Referido"
+            ):
                 empresa = row["name"]
             else:
                 empresa = row["empresa"]
@@ -89,8 +101,8 @@ def add_clientes_en_profit(data):
                 "co_ven": "0001",
                 "co_pais": "VE",
                 "ciudad": "CARACAS",
-                "tipo_per": row["tip_persona"].split("|")[0],
-                "co_tab": row["tabulador_islr"].split("|")[0],
+                "tipo_per": row["tip_persona"].split("|")[0].strip(),
+                "co_tab": row["tabulador_islr"].split("|")[0].strip(),
                 "desc_glob": 0,
                 "lunes": 0,
                 "martes": 0,
@@ -102,7 +114,7 @@ def add_clientes_en_profit(data):
                 "contrib": 1,
                 "co_cta_ingr_egr": "001",
                 "juridico": row["es_juridico"],
-                "tipo_adi": row["clasif"].split("|")[0],
+                "tipo_adi": row["clasif"].split("|")[0].strip(),
                 "valido": 0,
                 "sincredito": 0,
                 "contribu_e": row["es_contrib"],
@@ -153,12 +165,20 @@ def add_clientes_en_profit(data):
                     oClientesIzquierda.normalize_payload_cliente(payload_cliente_profit)
                 )
 
-            # Prepara los datos para actualizar en CRM
-            item = {
-                "id": row["id"],
-                "codigo_cliente": cod_cliente,
-            }
-            updates.append(item)
+            # Agregar a la lista de actualización si corresponde a una cuenta en el CRM
+            if row["apartado"] == "Cuenta":
+                item_update_account = {
+                    "id": row["id"],
+                    "codigo_cliente": cod_cliente,
+                }
+                rows_update_account.append(item_update_account)
+            # Agregar a la lista de actualización si corresponde a un referido en el CRM
+            elif row["apartado"] == "Referido":
+                item_update_referido = {
+                    "id": row["id"],
+                    "codigo_de_cliente": cod_cliente,
+                }
+                rows_update_referido.append(item_update_referido)
 
         # Crear clientes en la base de datos
         derecha_count_rows = oClientesDerecha.create_clientes(safe_derecha)
@@ -177,9 +197,20 @@ def add_clientes_en_profit(data):
 
         # Actualizar CRM e insertar en Mikrowisp si hubo inserciones
         if derecha_count_rows or izquierda_count_rows:
-            # Actualizar CRM
-            oClientesCRM.update_clientes(updates)
-            st.session_state.conexion_crm.commit()
+
+            # Si hay filas para actualizar en apartado cuenta
+            if rows_update_account:
+                # Actualizar la tabla account en CRM
+                oClientesCRM.update_clientes(rows_update_account)
+                st.session_state.conexion_crm.commit()
+
+            # Si hay filas para actualizar en apartado referido
+            if rows_update_referido:
+                # Actualizar la tabla referido en CRM
+                oClientesCRM.update_clientes(
+                    rows_update_referido, entity_cliente="referido"
+                )
+                st.session_state.conexion_crm.commit()
 
             # Insertar en Mikrowisp
             rows_count_clientes = oInsertClientesMW.create_clientes(safe_MW)
@@ -257,11 +288,18 @@ def add_clientes_en_profit(data):
 
         # Enviar notificaciones a los clientes
         for notif in safe_notif_client:
-            st.session_state.oEvolutionClient.send_text(
-                number="584242001584",
-                text=notif["mensaje"],
-                delay=1200,
-            )
+            try:
+                st.session_state.oEvolutionClient.send_text(
+                    number="584143893828",
+                    text=notif["mensaje"],
+                    delay=1200,
+                )
+            except requests.HTTPError as e:
+                print(
+                    f"HTTP error: {e} - response: {getattr(e.response, 'text', None)}"
+                )
+            except Exception as e:
+                print(f"Error: {e}")
 
     # Retorna la cantidad de filas procesadas
     return {
