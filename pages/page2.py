@@ -26,12 +26,147 @@ for key, default in [
     ("stage2", 0),
     ("clientes_para_profit", None),
     ("editor", None),
+    ("count", 0),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
 
 if st.button("Refrescar"):
     st.session_state.stage2 = 0
+
+
+def update_counter(value_change):
+    st.session_state.count += value_change
+
+
+def _prepare_payloads(seleted):
+    """Construye las listas de payloads y arrays de actualización a partir de los rows seleccionados."""
+    safe_derecha = []
+    safe_izquierda = []
+    safe_MW = []
+    safe_MW_notif = []
+    safe_notif_client = []
+    rows_update_account = []
+    rows_update_referido = []
+
+    oClientesDerecha = Clientes(db=st.session_state.conexion_facturas)
+    oClientesIzquierda = Clientes(db=st.session_state.conexion_recibos)
+    oInsertClientesMW = InsertClientes(db=st.session_state.conexion_mw)
+
+    st.session_state.o_clientes_monitoreo_izquierda.new_cod_cliente()
+
+    for _, row in seleted.iterrows():
+        cod_cliente = (
+            st.session_state.o_clientes_monitoreo_izquierda.next_cod_cliente()
+            if row["codigo_cliente"] == ""
+            else row["codigo_cliente"]
+        )
+
+        if row["clasif"].split("|")[0].strip() == "2":
+            cod_cliente = f"{cod_cliente}-0"
+
+        empresa = (
+            row["name"]
+            if (row["m_pago"] in ("Recibo", "Factura") and row["empresa"] == "")
+            or row.get("apartado") == "Referido"
+            else row["empresa"]
+        )
+
+        user = st.session_state.usuario
+        payload_cliente_profit = {
+            "co_cli": cod_cliente,
+            "tip_cli": "01",
+            "cli_des": empresa,
+            "inactivo": 0,
+            "fecha_reg": datetime.now(),
+            "direc1": row["direccion_de_facturacion"],
+            "telefonos": row["num_admin"],
+            "email": row["admin_email"],
+            "puntaje": 0,
+            "mont_cre": 0,
+            "cond_pag": "01",
+            "plaz_pag": 0,
+            "desc_ppago": 0,
+            "co_zon": "011",
+            "co_seg": "ADM",
+            "co_ven": "0001",
+            "co_pais": "VE",
+            "ciudad": "CARACAS",
+            "tipo_per": row["tip_persona"].split("|")[0].strip(),
+            "co_tab": row["tabulador_islr"].split("|")[0].strip(),
+            "desc_glob": 0,
+            "lunes": 0,
+            "martes": 0,
+            "miercoles": 0,
+            "jueves": 0,
+            "viernes": 0,
+            "sabado": 0,
+            "domingo": 0,
+            "contrib": 1,
+            "co_cta_ingr_egr": "001",
+            "juridico": row["es_juridico"],
+            "tipo_adi": row["clasif"].split("|")[0].strip(),
+            "valido": 0,
+            "sincredito": 0,
+            "contribu_e": row["es_contrib"],
+            "rete_regis_doc": 0,
+            "porc_esp": 100,
+            "Id": 0,
+            "co_us_in": user,
+            "co_sucu_in": "01",
+            "co_us_mo": user,
+            "co_sucu_mo": "01",
+        }
+
+        payload_cliente_MW = {
+            # "id": "",
+            "nombre": empresa,
+            "estado": "ACTIVO",
+            "correo": row["tenico_email"],
+            "telefono": row["num_tecnico"],
+            "movil": row["num_tecnico"],
+            "cedula": row["cedula"],
+            "pasarela": "s/data",
+            "codigo": "123",
+            "direccion_principal": row["direccion_tecnica"],
+            "codigo_cliente": cod_cliente,
+        }
+
+        safe_notif_client.append(
+            {
+                "mensaje": f"✳️ Nuevo cliente: {cod_cliente} - {empresa} módulo '{row['m_pago']}'"
+            }
+        )
+        safe_MW.append(oInsertClientesMW.normalize_payload_cliente(payload_cliente_MW))
+
+        if row["m_pago"] == "Factura":
+            safe_derecha.append(
+                oClientesDerecha.normalize_payload_cliente(payload_cliente_profit)
+            )
+        else:
+            safe_izquierda.append(
+                oClientesIzquierda.normalize_payload_cliente(payload_cliente_profit)
+            )
+
+        if row.get("apartado") == "Cuenta":
+            rows_update_account.append({"id": row["id"], "codigo_cliente": cod_cliente})
+        elif row.get("apartado") == "Referido":
+            rows_update_referido.append(
+                {"id": row["id"], "codigo_de_cliente": cod_cliente}
+            )
+
+    return (
+        safe_derecha,
+        safe_izquierda,
+        safe_MW,
+        safe_MW_notif,
+        safe_notif_client,
+        rows_update_account,
+        rows_update_referido,
+        oInsertClientesMW,
+        oClientesDerecha,
+        oClientesIzquierda,
+    )
 
 
 def add_clientes_en_profit(data):
@@ -55,130 +190,20 @@ def add_clientes_en_profit(data):
         oClientesIzquierda = Clientes(db=st.session_state.conexion_recibos)
         # Inicializar el generador de códigos de cliente de la izquierda
         st.session_state.o_clientes_monitoreo_izquierda.new_cod_cliente()
-        for index, row in seleted.iterrows():
-            # Generar código de cliente según el módulo, prevee el ingreso manual de código
-            cod_cliente = (
-                # Si no hay código de cliente para la izquierda, generar uno nuevo
-                st.session_state.o_clientes_monitoreo_izquierda.next_cod_cliente()
-                if row["codigo_cliente"] == ""
-                else (
-                    row["codigo_cliente"]
-                    if row["m_pago"] == "Recibo"
-                    else row["codigo_cliente"]
-                )
-            )
 
-            # Si es clasificación 2, agregar sufijo "-0" para revendedor
-            if row["clasif"].split("|")[0].strip() == "2":
-                cod_cliente = f"{cod_cliente}-0"
-
-            # Si "no hay empresa" o es "Referido", usar el nombre del cliente
-            if (
-                row["m_pago"] in ("Recibo", "Factura")
-                and row["empresa"] == ""
-                or row["apartado"] == "Referido"
-            ):
-                empresa = row["name"]
-            else:
-                empresa = row["empresa"]
-
-            payload_cliente_profit = {
-                "co_cli": cod_cliente,
-                "tip_cli": "01",
-                "cli_des": empresa,
-                "inactivo": 0,
-                "fecha_reg": datetime.now(),
-                "direc1": row["direccion_de_facturacion"],
-                "telefonos": row["num_admin"],
-                "email": row["admin_email"],
-                "puntaje": 0,
-                "mont_cre": 0,
-                "cond_pag": "01",
-                "plaz_pag": 0,
-                "desc_ppago": 0,
-                "co_zon": "011",
-                "co_seg": "ADM",
-                "co_ven": "0001",
-                "co_pais": "VE",
-                "ciudad": "CARACAS",
-                "tipo_per": row["tip_persona"].split("|")[0].strip(),
-                "co_tab": row["tabulador_islr"].split("|")[0].strip(),
-                "desc_glob": 0,
-                "lunes": 0,
-                "martes": 0,
-                "miercoles": 0,
-                "jueves": 0,
-                "viernes": 0,
-                "sabado": 0,
-                "domingo": 0,
-                "contrib": 1,
-                "co_cta_ingr_egr": "001",
-                "juridico": row["es_juridico"],
-                "tipo_adi": row["clasif"].split("|")[0].strip(),
-                "valido": 0,
-                "sincredito": 0,
-                "contribu_e": row["es_contrib"],
-                "rete_regis_doc": 0,
-                "porc_esp": 100,
-                "Id": 0,
-                "co_us_in": "JACK",
-                "co_sucu_in": "01",
-                "co_us_mo": "JACK",
-                "co_sucu_mo": "01",
-            }
-
-            payload_cliente_MW = {
-                # "id": "",
-                "nombre": empresa,
-                "estado": "ACTIVO",
-                "correo": row["tenico_email"],
-                "telefono": row["num_tecnico"],
-                "movil": row["num_tecnico"],
-                "cedula": row["cedula"],
-                "pasarela": "s/data",
-                "codigo": "123",
-                "direccion_principal": row["direccion_tecnica"],
-                "codigo_cliente": cod_cliente,
-            }
-
-            # Preparar notificación para el cliente creado
-            safe_notif_client.append(
-                {
-                    "mensaje": f"Se agregó en Mikrowisp el cliente: {cod_cliente} - {empresa}",
-                }
-            )
-
-            # Preparar datos para Mikrowisp
-            safe_MW.append(
-                oInsertClientesMW.normalize_payload_cliente(payload_cliente_MW)
-            )
-
-            # Separar por módulo
-            if row["m_pago"] == "Factura":
-                # Preparar datos para módulo de facturas
-                safe_derecha.append(
-                    oClientesDerecha.normalize_payload_cliente(payload_cliente_profit)
-                )
-            else:
-                # Preparar datos para módulo de recibos
-                safe_izquierda.append(
-                    oClientesIzquierda.normalize_payload_cliente(payload_cliente_profit)
-                )
-
-            # Agregar a la lista de actualización si corresponde a una cuenta en el CRM
-            if row["apartado"] == "Cuenta":
-                item_update_account = {
-                    "id": row["id"],
-                    "codigo_cliente": cod_cliente,
-                }
-                rows_update_account.append(item_update_account)
-            # Agregar a la lista de actualización si corresponde a un referido en el CRM
-            elif row["apartado"] == "Referido":
-                item_update_referido = {
-                    "id": row["id"],
-                    "codigo_de_cliente": cod_cliente,
-                }
-                rows_update_referido.append(item_update_referido)
+        # Preparar los payloads de inserción y actualización
+        (
+            safe_derecha,
+            safe_izquierda,
+            safe_MW,
+            safe_MW_notif,
+            safe_notif_client,
+            rows_update_account,
+            rows_update_referido,
+            oInsertClientesMW,
+            oClientesDerecha,
+            oClientesIzquierda,
+        ) = _prepare_payloads(seleted)
 
         # Crear clientes en la base de datos
         derecha_count_rows = oClientesDerecha.create_clientes(safe_derecha)
@@ -225,7 +250,7 @@ def add_clientes_en_profit(data):
                             cliente["codigo_cliente"]
                         )
                     )
-
+                    # Este payload se maneja aparte porque requiere el ID generado
                     payload_notificaciones = {
                         "cliente": cliente_id,
                         "impuesto": "NADA",
@@ -286,20 +311,20 @@ def add_clientes_en_profit(data):
             else:
                 st.session_state.conexion_mw.rollback()
 
-        # Enviar notificaciones a los clientes
-        for notif in safe_notif_client:
-            try:
-                st.session_state.oEvolutionClient.send_text(
-                    number="584143893828",
-                    text=notif["mensaje"],
-                    delay=1200,
-                )
-            except requests.HTTPError as e:
-                print(
-                    f"HTTP error: {e} - response: {getattr(e.response, 'text', None)}"
-                )
-            except Exception as e:
-                print(f"Error: {e}")
+            # Enviar notificaciones a los clientes
+            for notif in safe_notif_client:
+                try:
+                    st.session_state.oEvolutionClient.send_text(
+                        number="584143893828",
+                        text=notif["mensaje"],
+                        delay=1200,
+                    )
+                except requests.HTTPError as e:
+                    print(
+                        f"HTTP error: {e} - response: {getattr(e.response, 'text', None)}"
+                    )
+                except Exception as e:
+                    print(f"Error: {e}")
 
     # Retorna la cantidad de filas procesadas
     return {
@@ -313,7 +338,7 @@ def set_stage(i):
 
 
 """
-## Clientes por agregar en PROFIT
+## ⚡👨 Clientes por agregar en PROFIT
 """
 if "o_sync_clientes" not in st.session_state:
     st.error("No se ha inicializado la sincronización de clientes.")
@@ -339,8 +364,27 @@ if st.session_state.stage2 == 0:
     # Inserta columna llamada 'clasif'
     clientes.insert(5, "clasif", st.session_state.list_clasificacion[0])
 
+    # Filtro por tipo de módulo de pago
+    if st.session_state.rol_user.has_permission(
+        "Add_Clientes_Derecha", "create"
+    ) and not st.session_state.rol_user.has_permission(
+        "Add_Clientes_Izquierda", "create"
+    ):
+        # Si el usuario tiene permiso para crear en la derecha pero no en la izquierda
+        filtro = clientes["m_pago"] == "Factura"
+    elif st.session_state.rol_user.has_permission(
+        "Add_Clientes_Izquierda", "create"
+    ) and not st.session_state.rol_user.has_permission(
+        "Add_Clientes_Derecha", "create"
+    ):
+        # Si el usuario tiene permiso para crear en la izquierda pero no en la derecha
+        filtro = clientes["m_pago"] == "Recibo"
+    else:
+        # No hay filtro, mostrar todos
+        filtro = []
+
     # Guarda en session state
-    st.session_state.clientes_para_profit = clientes
+    st.session_state.clientes_para_profit = clientes[filtro].reset_index(drop=True)
     set_stage(1)
 
 
@@ -352,11 +396,15 @@ if not st.session_state.clientes_para_profit.empty:
     # Reemplazar valores NaN por cadenas vacías
     st.session_state.clientes_para_profit.fillna("", inplace=True)
 
-    # Asignar el código de cliente basado en el tipo de módulo de pago
+    # Asignar el código de cliente basado en el tipo de módulo de pago y la disponibilidad de RIF o cédula
+    df = st.session_state.clientes_para_profit
+    # Asegurar que r_i_f no tenga NaN para comparación
+    df["r_i_f"] = df["r_i_f"].fillna("")
+    condition = (df["m_pago"] == "Factura") & (df["r_i_f"] != "")
     st.session_state.clientes_para_profit["codigo_cliente"] = where(
-        st.session_state.clientes_para_profit["m_pago"] == "Factura",
-        st.session_state.clientes_para_profit["r_i_f"],
-        "",
+        condition,
+        df["r_i_f"],
+        df["cedula"],
     )
 
     # Asignar tipo de persona Si es o no cliente jurídico
@@ -481,30 +529,51 @@ if not st.session_state.clientes_para_profit.empty:
     if st.button(
         "Agregar clientes seleccionados",
         type="primary",
+        on_click=update_counter,
+        kwargs=dict(value_change=1),
     ):
-        # Abrir conexiones
-        st.session_state.open_cnn_db()
+        if st.session_state.count == 1:
+            try:
+                # Abrir conexiones
+                st.session_state.open_cnn_db()
 
-        # Procesar los seleccionados usando la versión editada
-        result = add_clientes_en_profit(editor)
-        filas_a_mantener = editor[~editor["sel"]]
-        if result["derecha_count"] > 0 or result["izquierda_count"] > 0:
-            # Si no quieres resetearlo, simplemente asigna filas_a_mantener
-            st.session_state.clientes_para_profit = filas_a_mantener.reset_index(
-                drop=True
-            )
-            st.success(
-                f"Clientes agregados exitosamente en Profit. Procesados: {result['derecha_count']}, {result['izquierda_count']}",
-                icon="✅",
-            )
+                # Mostrar spinner mientras se procesa
+                with st.spinner("Procesando clientes... por favor espera."):
+                    # Procesar los seleccionados usando la versión editada
+                    result = add_clientes_en_profit(editor)
+                    # debug mínimo
+                    st.write("Procesamiento finalizado. Resultado:", result)
+                filas_a_mantener = editor[~editor["sel"]]
+                if result["derecha_count"] > 0 or result["izquierda_count"] > 0:
+                    # Si no quieres resetearlo, simplemente asigna filas_a_mantener
+                    st.session_state.clientes_para_profit = (
+                        filas_a_mantener.reset_index(drop=True)
+                    )
+                    st.success(
+                        "Clientes agregados exitosamente en Profit.",
+                        icon="✅",
+                    )
+                    time.sleep(1)
+                    st.session_state.count = 0
+                    st.rerun()
+                else:
+                    st.warning("No se pudieron agregar clientes en Profit.", icon="⚠️")
+                    time.sleep(1)
+
+                set_stage(1)
+            except Exception as e:
+                st.error(f"Error al procesar: {e}")
+            finally:
+                # Asegurar cierre de conexiones y reset del flag en caso de fallo
+                try:
+                    st.session_state.close_cnn_db()
+                except Exception:
+                    pass
+                pass
         else:
-            st.warning("No se pudieron agregar clientes en Profit.", icon="⚠️")
-            time.sleep(1)
+            st.warning("Presionar el botón solo una vez.", icon="⚠️")
+            st.session_state.count = 0
 
-        # Cerrar conexiones
-        st.session_state.close_cnn_db()
-        set_stage(1)
-        st.rerun()
 else:
     st.info("No hay clientes por agregar.", icon="ℹ️")
 

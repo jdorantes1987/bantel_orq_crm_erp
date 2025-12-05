@@ -78,127 +78,133 @@ def set_stage(i):
 
 
 if st.session_state.stage == 0:
-    st.session_state.password = ""
-    env_path = os.path.join("../conexiones", ".env")
-    load_dotenv(
-        dotenv_path=env_path,
-        override=True,
-    )  # Recarga las variables de entorno desde el archivo
+    # Inicializar conexiones y gestores
+    with st.spinner("Inicializando..."):
+        st.session_state.password = ""
+        env_path = os.path.join("../conexiones", ".env")
+        load_dotenv(
+            dotenv_path=env_path,
+            override=True,
+        )  # Recarga las variables de entorno desde el archivo
 
-    # Para SQL Server
-    db_credentials = {
-        "host": os.getenv("HOST_PRODUCCION_PROFIT"),
-        "database": os.getenv("DB_NAME_DERECHA_PROFIT"),
-        "user": os.getenv("DB_USER_PROFIT"),
-        "password": os.getenv("DB_PASSWORD_PROFIT"),
-    }
-    sqlserver_connector_fact = SQLServerConnector(**db_credentials)
-    try:
-        # Conexión a la base de datos de la derecha
-        st.session_state.conexion_facturas = DatabaseConnector(sqlserver_connector_fact)
+        # Para SQL Server
+        db_credentials = {
+            "host": os.getenv("HOST_PRODUCCION_PROFIT"),
+            "database": os.getenv("DB_NAME_DERECHA_PROFIT"),
+            "user": os.getenv("DB_USER_PROFIT"),
+            "password": os.getenv("DB_PASSWORD_PROFIT"),
+        }
+        sqlserver_connector_fact = SQLServerConnector(**db_credentials)
+        try:
+            # Conexión a la base de datos de la derecha
+            st.session_state.conexion_facturas = DatabaseConnector(
+                sqlserver_connector_fact
+            )
 
-        # Conexión a la base de datos de la izquierda
-        db_credentials["database"] = os.getenv("DB_NAME_IZQUIERDA_PROFIT")
-        sqlserver_connector_recibos = SQLServerConnector(**db_credentials)
-        st.session_state.conexion_recibos = DatabaseConnector(
-            sqlserver_connector_recibos
-        )
+            # Conexión a la base de datos de la izquierda
+            db_credentials["database"] = os.getenv("DB_NAME_IZQUIERDA_PROFIT")
+            sqlserver_connector_recibos = SQLServerConnector(**db_credentials)
+            st.session_state.conexion_recibos = DatabaseConnector(
+                sqlserver_connector_recibos
+            )
 
-        # Conexión a MySql CRM Ventas
-        mysql_connector = MySQLConnector(
-            host=os.environ["HOST_PRODUCCION_CRM_VENTAS"],
-            database=os.environ["DB_NAME_CRM_VENTAS"],
-            user=os.environ["DB_USER_CRM_VENTAS"],
-            password=os.environ["DB_PASSWORD_CRM_VENTAS"],
-        )
-        st.session_state.conexion_crm = DatabaseConnector(mysql_connector)
+            # Conexión a MySql CRM Ventas
+            mysql_connector = MySQLConnector(
+                host=os.environ["HOST_PRODUCCION_CRM_VENTAS"],
+                database=os.environ["DB_NAME_CRM_VENTAS"],
+                user=os.environ["DB_USER_CRM_VENTAS"],
+                password=os.environ["DB_PASSWORD_CRM_VENTAS"],
+            )
+            st.session_state.conexion_crm = DatabaseConnector(mysql_connector)
 
-        # Conexión a MySql Mikrowisp
-        mysql_connector = MySQLConnector(
-            host=os.environ["HOST_PRODUCCION_MKWSP"],
-            database=os.environ["DB_NAME_MKWSP"],
-            user=os.environ["DB_USER_MKWSP"],
-            password=os.environ["DB_PASSWORD_MKWSP"],
-        )
+            # Conexión a MySql Mikrowisp
+            mysql_connector = MySQLConnector(
+                host=os.environ["HOST_PRODUCCION_MKWSP"],
+                database=os.environ["DB_NAME_MKWSP"],
+                user=os.environ["DB_USER_MKWSP"],
+                password=os.environ["DB_PASSWORD_MKWSP"],
+            )
 
-        st.session_state.conexion_mw = DatabaseConnector(mysql_connector)
+            st.session_state.conexion_mw = DatabaseConnector(mysql_connector)
 
-        # Almacenar el gestor de autenticación en session_state
-        st.session_state.auth_manager = AuthManager(st.session_state.conexion_facturas)
-        st.session_state.role_manager = RoleManagerDB(
-            st.session_state.conexion_facturas
-        )
+            # Almacenar el gestor de autenticación en session_state
+            st.session_state.auth_manager = AuthManager(
+                st.session_state.conexion_facturas
+            )
+            st.session_state.role_manager = RoleManagerDB(
+                st.session_state.conexion_facturas
+            )
 
-        # Para poblar estas listas debo abrir la conexión a la base de datos
+            # Para poblar estas listas debo abrir la conexión a la base de datos
 
-        # Abrir la conexión a la base de datos
-        st.session_state.open_cnn_db()
+            # Abrir la conexión a la base de datos
+            st.session_state.open_cnn_db()
 
-        # Instanciar TabuladorISLR
-        oTab = TabuladorISLR(st.session_state.conexion_facturas)
-        tab = oTab.get_tabulador()
-        if tab:
-            # Obtener solo las claves co_tab y tab_des
-            keys = [(d["co_tab"], d["tab_des"]) for d in tab] if tab else []
-            # separar por comas los valores de cada tupla
-            st.session_state.lista_tab = [" | ".join(map(str, t)) for t in keys]
+            # Instanciar TabuladorISLR
+            oTab = TabuladorISLR(st.session_state.conexion_facturas)
+            tab = oTab.get_tabulador()
+            if tab:
+                # Obtener solo las claves co_tab y tab_des
+                keys = [(d["co_tab"], d["tab_des"]) for d in tab] if tab else []
+                # separar por comas los valores de cada tupla
+                st.session_state.lista_tab = [" | ".join(map(str, t)) for t in keys]
 
-        # Crear lista de tipos de persona
-        st.session_state.list_tipo_persona = [
-            "1 | Natural Residente",
-            "2 | Natural No Residente",
-            "3 | Juridica Domiciliada",
-            "4 | Juridica No Domiciliada",
-            "5 | Exenta",
-            "6 | Tesoreria Nacional",
-            "7 | Otros",
-            "8 | Otros 2 (fijo=TPE)",
-        ]
+            # Crear lista de tipos de persona
+            st.session_state.list_tipo_persona = [
+                "1 | Natural Residente",
+                "2 | Natural No Residente",
+                "3 | Juridica Domiciliada",
+                "4 | Juridica No Domiciliada",
+                "5 | Exenta",
+                "6 | Tesoreria Nacional",
+                "7 | Otros",
+                "8 | Otros 2 (fijo=TPE)",
+            ]
 
-        # Crear lista de clasificacion de clientes
-        st.session_state.list_clasificacion = [
-            "1 | Normal",
-            "2 | Revendedor",
-            "3 | Referido",
-        ]
+            # Crear lista de clasificacion de clientes
+            st.session_state.list_clasificacion = [
+                "1 | Normal",
+                "2 | Revendedor",
+                "3 | Referido",
+            ]
 
-        # Instanciar SyncClientes
-        st.session_state.o_sync_clientes = SyncClientes(
-            db_crm=st.session_state.conexion_crm,
-            db_mikrowisp=st.session_state.conexion_mw,
-            db_profit_fact=st.session_state.conexion_facturas,
-            db_profit_recibos=st.session_state.conexion_recibos,
-        )
+            # Instanciar SyncClientes
+            st.session_state.o_sync_clientes = SyncClientes(
+                db_crm=st.session_state.conexion_crm,
+                db_mikrowisp=st.session_state.conexion_mw,
+                db_profit_fact=st.session_state.conexion_facturas,
+                db_profit_recibos=st.session_state.conexion_recibos,
+            )
 
-        st.session_state.o_clientes_monitoreo_izquierda = ClientesMonitoreoProfit(
-            db=st.session_state.conexion_recibos
-        )
+            st.session_state.o_clientes_monitoreo_izquierda = ClientesMonitoreoProfit(
+                db=st.session_state.conexion_recibos
+            )
 
-        st.session_state.o_clientes_monitoreo_derecha = ClientesMonitoreoProfit(
-            db=st.session_state.conexion_facturas
-        )
+            st.session_state.o_clientes_monitoreo_derecha = ClientesMonitoreoProfit(
+                db=st.session_state.conexion_facturas
+            )
 
-        st.session_state.o_clientes_MW = Clientes(db=st.session_state.conexion_mw)
+            st.session_state.o_clientes_MW = Clientes(db=st.session_state.conexion_mw)
 
-        # Cerrar la conexión a la base de datos
-        st.session_state.close_cnn_db()
+            # Cerrar la conexión a la base de datos
+            st.session_state.close_cnn_db()
 
-        url = os.getenv("EVOLUTION_API_URL", "")
-        apikey = os.getenv("EVOLUTION_API_KEY", "")
-        instance_name = os.getenv("EVOLUTION_INSTANCE_NAME", "")
+            url = os.getenv("EVOLUTION_API_URL", "")
+            apikey = os.getenv("EVOLUTION_API_KEY", "")
+            instance_name = os.getenv("EVOLUTION_INSTANCE_NAME", "")
 
-        # pasar el nombre de la instancia (Alexander en tu caso)
-        st.session_state.oEvolutionClient = EvolutionClient(
-            base_url=url,
-            apikey=apikey,
-            instance_name=instance_name,
-        )
+            # pasar el nombre de la instancia (Alexander en tu caso)
+            st.session_state.oEvolutionClient = EvolutionClient(
+                base_url=url,
+                apikey=apikey,
+                instance_name=instance_name,
+            )
 
-    except Exception as e:
-        st.error(f"No se pudo conectar a la base de datos: {e}")
-        st.stop()
+        except Exception as e:
+            st.error(f"No se pudo conectar a la base de datos: {e}")
+            st.stop()
 
-    set_stage(1)
+        set_stage(1)
 
 
 def existe_user(username):
@@ -221,10 +227,10 @@ def iniciar_sesion(user, password):
     else:
         # Verificar permisos
         if st.session_state.rol_user.has_permission("Clientes", "create"):
-            st.toast(msg, icon="✅")
             st.session_state.logged_in = True
             st.session_state.user = user
             st.session_state.close_cnn_db()
+            st.toast(msg, icon="✅")
             st.switch_page(MENU_INICIO)
         else:
             st.error("No tienes permisos para acceder a esta aplicación.")
@@ -252,9 +258,9 @@ if st.session_state.stage == 1:
                 )
                 st.session_state.close_cnn_db()
                 st.rerun()
-        else:
-            if user:
+            else:
                 st.error("El usuario no existe. Inténtalo de nuevo.")
+                st.session_state.close_cnn_db()
     else:
         # Si el usuario ya ha sido ingresado, se oculta el input y se muestra el usuario ingresado
         st.write(f"### Usuario ingresado: :blue[{st.session_state.usuario}]")
