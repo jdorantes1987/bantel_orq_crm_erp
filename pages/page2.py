@@ -532,6 +532,7 @@ if not st.session_state.clientes_para_profit.empty:
         on_click=update_counter,
         kwargs=dict(value_change=1),
     ):
+        # Prevenir múltiples clics
         if st.session_state.count == 1:
             try:
                 # Abrir conexiones
@@ -554,7 +555,6 @@ if not st.session_state.clientes_para_profit.empty:
                         icon="✅",
                     )
                     time.sleep(1)
-                    st.session_state.count = 0
                     st.rerun()
                 else:
                     st.warning("No se pudieron agregar clientes en Profit.", icon="⚠️")
@@ -567,6 +567,7 @@ if not st.session_state.clientes_para_profit.empty:
                 # Asegurar cierre de conexiones y reset del flag en caso de fallo
                 try:
                     st.session_state.close_cnn_db()
+                    st.session_state.count = 0
                 except Exception:
                     pass
                 pass
@@ -576,6 +577,7 @@ if not st.session_state.clientes_para_profit.empty:
 
 else:
     st.info("No hay clientes por agregar.", icon="ℹ️")
+    st.session_state.count = 0
 
 
 if st.session_state.stage2 == 1:
