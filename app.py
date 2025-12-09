@@ -5,7 +5,8 @@ from time import sleep
 import streamlit as st
 from dotenv import load_dotenv
 
-from clients.clientes_mikrowisp import Clientes
+from clients.clientes_mikrowisp import Clientes as ClientesMW
+from clients.clientes_OSTickect import Clientes as ClientesOSTicket
 from clients.clientes_profit import ClientesMonitoreoProfit
 from controller.evolution_client import EvolutionClient
 from controller.sync_clientes import SyncClientes
@@ -40,12 +41,14 @@ def abrir_conexion_db():
     st.session_state.conexion_recibos._connector.connect()
     st.session_state.conexion_crm._connector.connect()
     st.session_state.conexion_mw._connector.connect()
+    st.session_state.conexion_osticket._connector.connect()
 
     # Ajustar autocommit a False para permitir transacciones
     st.session_state.conexion_facturas.autocommit(False)
     st.session_state.conexion_recibos.autocommit(False)
     st.session_state.conexion_crm.autocommit(False)
     st.session_state.conexion_mw.autocommit(False)
+    st.session_state.conexion_osticket.autocommit(False)
 
 
 def cerrar_conexion_db():
@@ -54,6 +57,7 @@ def cerrar_conexion_db():
     st.session_state.conexion_recibos.close_connection()
     st.session_state.conexion_crm.close_connection()
     st.session_state.conexion_mw.close_connection()
+    st.session_state.conexion_osticket.close_connection()
 
 
 # Cargar las claves de session si no existen
@@ -127,6 +131,15 @@ if st.session_state.stage == 0:
 
             st.session_state.conexion_mw = DatabaseConnector(mysql_connector)
 
+            # Para MySql
+            mysql_connector = MySQLConnector(
+                host=os.environ["HOST_DEV_OSTICKET"],
+                database=os.environ["DB_NAME_OSTICKET"],
+                user=os.environ["DB_USER_OSTICKET"],
+                password=os.environ["DB_PASSWORD_OSTICKET"],
+            )
+            st.session_state.conexion_osticket = DatabaseConnector(mysql_connector)
+
             # Almacenar el gestor de autenticación en session_state
             st.session_state.auth_manager = AuthManager(
                 st.session_state.conexion_facturas
@@ -184,7 +197,11 @@ if st.session_state.stage == 0:
                 db=st.session_state.conexion_facturas
             )
 
-            st.session_state.o_clientes_MW = Clientes(db=st.session_state.conexion_mw)
+            st.session_state.o_clientes_MW = ClientesMW(db=st.session_state.conexion_mw)
+
+            st.session_state.o_clientes_osticket = ClientesOSTicket(
+                db=st.session_state.conexion_osticket
+            )
 
             # Cerrar la conexión a la base de datos
             st.session_state.close_cnn_db()
