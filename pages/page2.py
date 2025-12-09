@@ -9,7 +9,8 @@ from numpy import where
 from pandas import Index, concat
 
 from clients.clientes_crm_ventas import ClientesCRM
-from controller.insert_client_mikrowisp import InsertClientes
+from controller.insert_client_mikrowisp import InsertClientes as InsertClientesMW
+from controller.insert_client_osticket import InsertClientes as InsertClientesOSTicket
 from helpers.navigation import make_sidebar
 
 # Configuración de página con fondo personalizado
@@ -45,15 +46,24 @@ def _prepare_payloads(seleted):
     safe_izquierda = []
     safe_MW = []
     safe_MW_notif = []
+    safe_osticket1 = []
+    safe_osticket2 = []
+    safe_osticket3 = []
+    safe_osticket4 = []
     safe_notif_client = []
     rows_update_account = []
     rows_update_referido = []
 
     oClientesDerecha = Clientes(db=st.session_state.conexion_facturas)
     oClientesIzquierda = Clientes(db=st.session_state.conexion_recibos)
-    oInsertClientesMW = InsertClientes(db=st.session_state.conexion_mw)
+    oInsertClientesMW = InsertClientesMW(db=st.session_state.conexion_mw)
+    oInsertClientesOSTicket = InsertClientesOSTicket(
+        db=st.session_state.conexion_osticket
+    )
 
     st.session_state.o_clientes_monitoreo_izquierda.new_cod_cliente()
+    st.session_state.o_clientes_osticket.new_cod_cliente()
+    st.session_state.o_clientes_osticket.new_cod_form_entry()
 
     for _, row in seleted.iterrows():
         cod_cliente = (
@@ -61,6 +71,10 @@ def _prepare_payloads(seleted):
             if row["codigo_cliente"] == ""
             else row["codigo_cliente"]
         )
+        new_id_cliente_osticket = (
+            st.session_state.o_clientes_osticket.next_cod_cliente()
+        )
+        new_id_form_entry = st.session_state.o_clientes_osticket.next_cod_form_entry()
 
         if row["clasif"].split("|")[0].strip() == "2":
             cod_cliente = f"{cod_cliente}-0"
@@ -155,6 +169,93 @@ def _prepare_payloads(seleted):
                 {"id": row["id"], "codigo_de_cliente": cod_cliente}
             )
 
+        payload_cliente_osticket = {
+            "id": new_id_cliente_osticket,
+            "org_id": 0,
+            "name": empresa,
+            "default_email_id": new_id_cliente_osticket,
+            "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        safe_osticket1.append(
+            oInsertClientesOSTicket.normalize_payload_cliente(payload_cliente_osticket)
+        )
+
+        payload_user_email_ost = {
+            "id": new_id_cliente_osticket,
+            "user_id": new_id_cliente_osticket,
+            "flags": 0,
+            "address": row["tenico_email"],
+        }
+        safe_osticket2.append(
+            oInsertClientesOSTicket.normalize_payload_user_email(payload_user_email_ost)
+        )
+
+        payload_form_entry = {
+            "id": new_id_form_entry,
+            "form_id": 1,
+            "object_id": new_id_cliente_osticket,
+            "object_type": "U",
+            "sort": 1,
+            "created": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+        safe_osticket3.append(
+            oInsertClientesOSTicket.normalize_payload_form_entry(payload_form_entry)
+        )
+
+        payload_form_entry_value1 = {
+            "entry_id": new_id_form_entry,
+            "field_id": 3,
+            "value": row["num_tecnico"],
+        }
+        payload_form_entry_value2 = {
+            "entry_id": new_id_form_entry,
+            "field_id": 108,
+            "value": cod_cliente,
+        }
+        payload_form_entry_value3 = {
+            "entry_id": new_id_form_entry,
+            "field_id": 109,
+            "value": "ADI PRUEBA PYTHON OSTICKET",
+        }
+        payload_form_entry_value4 = {
+            "entry_id": new_id_form_entry,
+            "field_id": 110,
+            "value": "ACTIVO",
+        }
+        payload_form_entry_value5 = {
+            "entry_id": new_id_form_entry,
+            "field_id": 112,
+            "value": row["coordenadas_g_p_s"],
+        }
+
+        safe_osticket4.append(
+            oInsertClientesOSTicket.normalize_payload_form_entry_values(
+                payload_form_entry_value1
+            )
+        )
+        safe_osticket4.append(
+            oInsertClientesOSTicket.normalize_payload_form_entry_values(
+                payload_form_entry_value2
+            )
+        )
+        safe_osticket4.append(
+            oInsertClientesOSTicket.normalize_payload_form_entry_values(
+                payload_form_entry_value3
+            )
+        )
+        safe_osticket4.append(
+            oInsertClientesOSTicket.normalize_payload_form_entry_values(
+                payload_form_entry_value4
+            )
+        )
+        safe_osticket4.append(
+            oInsertClientesOSTicket.normalize_payload_form_entry_values(
+                payload_form_entry_value5
+            )
+        )
+
     return (
         safe_derecha,
         safe_izquierda,
@@ -164,8 +265,11 @@ def _prepare_payloads(seleted):
         rows_update_account,
         rows_update_referido,
         oInsertClientesMW,
-        oClientesDerecha,
-        oClientesIzquierda,
+        oInsertClientesOSTicket,
+        safe_osticket1,
+        safe_osticket2,
+        safe_osticket3,
+        safe_osticket4,
     )
 
 
@@ -176,7 +280,7 @@ def add_clientes_en_profit(data):
     # Nota: no usar caché aquí porque la función realiza efectos secundarios
     seleted = data[(data["sel"])].copy()
     oClientesCRM = ClientesCRM(db=st.session_state.conexion_crm)
-    oInsertClientesMW = InsertClientes(db=st.session_state.conexion_mw)
+    oInsertClientesMW = InsertClientesMW(db=st.session_state.conexion_mw)
 
     if not seleted.empty:
         safe_derecha = []
@@ -201,8 +305,11 @@ def add_clientes_en_profit(data):
             rows_update_account,
             rows_update_referido,
             oInsertClientesMW,
-            oClientesDerecha,
-            oClientesIzquierda,
+            oInsertClientesOSTicket,
+            safe_osticket1,
+            safe_osticket2,
+            safe_osticket3,
+            safe_osticket4,
         ) = _prepare_payloads(seleted)
 
         # Crear clientes en la base de datos
@@ -325,6 +432,61 @@ def add_clientes_en_profit(data):
                     )
                 except Exception as e:
                     print(f"Error: {e}")
+
+            rows_count_clientes_osticket = oInsertClientesOSTicket.create_clientes(
+                safe_osticket1
+            )
+            if rows_count_clientes_osticket:
+                print(
+                    f"filas afectadas en osticket clientes: {rows_count_clientes_osticket}"
+                )
+                st.session_state.conexion_osticket.commit()
+                rows_count_user_email_osticket = (
+                    oInsertClientesOSTicket.create_user_email(safe_osticket2)
+                )
+                if rows_count_user_email_osticket:
+                    print(
+                        f"filas afectadas en osticket user_email: {rows_count_user_email_osticket}"
+                    )
+                    st.session_state.conexion_osticket.commit()
+                    rows_form_entry_osticket = (
+                        oInsertClientesOSTicket.create_os_form_entry(safe_osticket3)
+                    )
+                    if rows_form_entry_osticket:
+                        print(
+                            f"filas afectadas en osticket form_entry: {rows_form_entry_osticket}"
+                        )
+                        st.session_state.conexion_osticket.commit()
+                        rows_form_entry_values_osticket = (
+                            oInsertClientesOSTicket.create_os_form_entry_values(
+                                safe_osticket4
+                            )
+                        )
+                        if rows_form_entry_values_osticket:
+                            print(
+                                f"filas afectadas en osticket form_entry_values: {rows_form_entry_values_osticket}"
+                            )
+                            st.session_state.conexion_osticket.commit()
+                        else:
+                            print(
+                                "No se insertaron valores de form_entry_values, se revierte la operación."
+                            )
+                            st.session_state.conexion_osticket.rollback()
+                    else:
+                        print(
+                            "No se insertaron valores de form_entry, se revierte la operación."
+                        )
+                        st.session_state.conexion_osticket.rollback()
+                else:
+                    print(
+                        "No se insertaron valores de user_email, se revierte la operación."
+                    )
+                    st.session_state.conexion_osticket.rollback()
+            else:
+                print(
+                    "No se insertaron valores de form_entry, se revierte la operación."
+                )
+                st.session_state.conexion_osticket.rollback()
 
     # Retorna la cantidad de filas procesadas
     return {
