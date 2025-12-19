@@ -107,7 +107,7 @@ if __name__ == "__main__":
     )
     try:
         response = client.send_text(
-            number="584241814887",
+            number="584242623485",
             text="Class python: message from API Evolution load_dotenv",
             delay=1200,
         )

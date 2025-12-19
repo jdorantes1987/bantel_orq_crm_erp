@@ -66,11 +66,8 @@ def _prepare_payloads(seleted):
     st.session_state.o_clientes_osticket.new_cod_form_entry()
 
     for _, row in seleted.iterrows():
-        cod_cliente = (
-            st.session_state.o_clientes_monitoreo_izquierda.next_cod_cliente()
-            if row["codigo_cliente"] == ""
-            else row["codigo_cliente"]
-        )
+        next_cod = st.session_state.o_clientes_monitoreo_izquierda.next_cod_cliente()
+        cod_cliente = next_cod if row["codigo_cliente"] == "" else row["codigo_cliente"]
         new_id_cliente_osticket = (
             st.session_state.o_clientes_osticket.next_cod_cliente()
         )
@@ -146,9 +143,21 @@ def _prepare_payloads(seleted):
             "codigo_cliente": cod_cliente,
         }
 
+        coords = str(row.get("coordenadas_g_p_s", "")).strip()
+
+        texto_mensaje = (
+            f"✳️ Cliente: *{cod_cliente}*\n"
+            f"razón social: *{empresa}*\n"
+            f"módulo: *{row['m_pago']}*\n"
+            f"número técnico: *{row['num_tecnico']}*\n"
+            f"servicio: *{row['servicio']}*\n"
+            f"correo: *{row['tenico_email']}*\n"
+            f"coordenadas: {coords}\n"
+            f"creado por: *{user}*"
+        )
         safe_notif_client.append(
             {
-                "mensaje": f"✳️ Nuevo cliente: {cod_cliente} - {empresa} módulo '{row['m_pago']}'"
+                "mensaje": texto_mensaje,
             }
         )
         safe_MW.append(oInsertClientesMW.normalize_payload_cliente(payload_cliente_MW))
@@ -217,7 +226,7 @@ def _prepare_payloads(seleted):
         payload_form_entry_value3 = {
             "entry_id": new_id_form_entry,
             "field_id": 109,
-            "value": "ADI PRUEBA PYTHON OSTICKET",
+            "value": row["servicio"],
         }
         payload_form_entry_value4 = {
             "entry_id": new_id_form_entry,
@@ -292,8 +301,6 @@ def add_clientes_en_profit(data):
         rows_update_referido = []
         oClientesDerecha = Clientes(db=st.session_state.conexion_facturas)
         oClientesIzquierda = Clientes(db=st.session_state.conexion_recibos)
-        # Inicializar el generador de códigos de cliente de la izquierda
-        st.session_state.o_clientes_monitoreo_izquierda.new_cod_cliente()
 
         # Preparar los payloads de inserción y actualización
         (
@@ -424,7 +431,7 @@ def add_clientes_en_profit(data):
                     st.session_state.oEvolutionClient.send_text(
                         number="584143893828",
                         text=notif["mensaje"],
-                        delay=1200,
+                        delay=1500,
                     )
                 except requests.HTTPError as e:
                     print(
@@ -562,11 +569,17 @@ if not st.session_state.clientes_para_profit.empty:
     df = st.session_state.clientes_para_profit
     # Asegurar que r_i_f no tenga NaN para comparación
     df["r_i_f"] = df["r_i_f"].fillna("")
+
     condition = (df["m_pago"] == "Factura") & (df["r_i_f"] != "")
     st.session_state.clientes_para_profit["codigo_cliente"] = where(
         condition,
         df["r_i_f"],
         df["cedula"],
+    )
+    st.session_state.clientes_para_profit["codigo_cliente"] = where(
+        df["m_pago"] != "Recibo",
+        df["codigo_cliente"],
+        "",
     )
 
     # Asignar tipo de persona Si es o no cliente jurídico

@@ -14,150 +14,156 @@ class ClientesCRM:
 
         query = """
                 SELECT account.id,
-                    account.codigo_cliente,
-                    account.name,
-                    account.direccion_de_facturacion,
-                    account.empresa,
-                    account.coordenadas_g_p_s,
-                    account.r_i_f,
-                    account.cedula,
-                    account.created_at,
-                    contact.tipo_de_contacto,
-                    contact.first_name,
-                    contact.last_name,
-                    contact.direccion_tecnica,
-                    phone_number.NUMERIC   AS num_admin,
-                    phone_number_1.NUMERIC AS num_tecnico,
-                    account.m_pago,
-                    email_address.lower    AS admin_email,
-                    email_address_1.lower  AS tenico_email,
-                    'Cuenta'               AS apartado
-                FROM   ((((((((account
-                            INNER JOIN account_contact
-                                    ON account.id = account_contact.account_id)
-                            INNER JOIN contact
-                                    ON ( account_contact.account_id = contact.account_id )
-                                        AND ( account_contact.contact_id = contact.id ))
-                            LEFT JOIN (entity_phone_number
-                                        LEFT JOIN phone_number
-                                            ON entity_phone_number.phone_number_id =
-                                    phone_number.id)
-                                    ON account.id = entity_phone_number.entity_id)
-                            INNER JOIN entity_phone_number AS entity_phone_number_1
-                                    ON contact.id = entity_phone_number_1.entity_id)
-                        INNER JOIN phone_number AS phone_number_1
-                                ON entity_phone_number_1.phone_number_id = phone_number_1.id)
-                        INNER JOIN entity_email_address
-                                ON account.id = entity_email_address.entity_id)
-                        INNER JOIN email_address
-                                ON entity_email_address.email_address_id = email_address.id)
-                        INNER JOIN entity_email_address AS entity_email_address_1
-                                ON contact.id = entity_email_address_1.entity_id)
-                    INNER JOIN email_address AS email_address_1
-                            ON entity_email_address_1.email_address_id = email_address_1.id
-                WHERE  account.deleted = '0'
-                UNION
-                SELECT c2.id,
-                    c2.codigo_de_cliente,
-                    c2.name,
-                    c2.direccion_de_facturacion,
-                    c2.empresa,
-                    c2.coordenadas_g_p_s,
-                    c2.r_i_f,
-                    c2.cedula,
-                    c2.created_at,
-                    c2.tipo_de_contacto,
-                    c2.first_name,
-                    c2.last_name,
-                    c2.direccion_tecnica,
-                    c2.num_admin,
-                    c2.num_tecnico,
-                    c2.m_pago,
-                    c2.admin_email,
-                    c2.tenico_email,
-                    'Referido' AS apartado
-                FROM   (SELECT r.id,
-                            r.name,
-                            r.codigo_de_cliente,
-                            c1.direccion_de_facturacion,
-                            c1.empresa,
-                            c1.coordenadas_g_p_s,
-                            c1.r_i_f,
-                            c1.cedula,
-                            c1.created_at,
-                            c1.tipo_de_contacto,
-                            c1.first_name,
-                            c1.last_name,
-                            c1.direccion_tecnica,
-                            c1.num_admin,
-                            c1.num_tecnico,
-                            c1.m_pago,
-                            c1.admin_email,
-                            c1.tenico_email
-                        FROM   referido AS r
-                            INNER JOIN account_referido AS ar
-                                    ON r.id = ar.referido_id
-                            LEFT JOIN (SELECT account.id,
-                                                account.direccion_de_facturacion,
-                                                account.empresa,
-                                                account.coordenadas_g_p_s,
-                                                account.r_i_f,
-                                                account.cedula,
-                                                account.created_at,
-                                                contact.tipo_de_contacto,
-                                                contact.first_name,
-                                                contact.last_name,
-                                                contact.direccion_tecnica,
-                                                phone_number.NUMERIC   AS num_admin,
-                                                phone_number_1.NUMERIC AS num_tecnico,
-                                                account.m_pago,
-                                                email_address.lower    AS admin_email,
-                                                email_address_1.lower  AS tenico_email
-                                        FROM   ((((((((account
-                                                        INNER JOIN account_contact
+                        account.codigo_cliente,
+                        account.NAME AS name,
+                        account.direccion_de_facturacion,
+                        account.empresa,
+                        account.coordenadas_g_p_s,
+                        account.r_i_f,
+                        account.cedula,
+                        account.created_at,
+                        contact.tipo_de_contacto,
+                        contact.first_name,
+                        contact.last_name,
+                        contact.direccion_tecnica,
+                        phone_number.numeric AS num_admin,
+                        phone_number_1.numeric AS num_tecnico,
+                        account.m_pago,
+                        email_address.lower AS admin_email,
+                        email_address_1.lower AS tenico_email,
+                        Concat(op.tipo_de_servicio, ' ', op.capacidad_de_servicio) AS servicio,
+                        'Cuenta' AS apartado
+                    FROM   ((((((((account
+                                INNER JOIN account_contact
+                                        ON account.id = account_contact.account_id)
+                                INNER JOIN contact
+                                        ON ( account_contact.account_id = contact.account_id )
+                                            AND ( account_contact.contact_id = contact.id ))
+                                LEFT JOIN (entity_phone_number
+                                            LEFT JOIN phone_number
+                                                ON entity_phone_number.phone_number_id =
+                                        phone_number.id)
+                                        ON account.id = entity_phone_number.entity_id)
+                                INNER JOIN entity_phone_number AS entity_phone_number_1
+                                        ON contact.id = entity_phone_number_1.entity_id)
+                            INNER JOIN phone_number AS phone_number_1
+                                    ON entity_phone_number_1.phone_number_id = phone_number_1.id)
+                            INNER JOIN entity_email_address
+                                    ON account.id = entity_email_address.entity_id)
+                            INNER JOIN email_address
+                                    ON entity_email_address.email_address_id = email_address.id)
+                            INNER JOIN entity_email_address AS entity_email_address_1
+                                    ON contact.id = entity_email_address_1.entity_id)
+                        INNER JOIN email_address AS email_address_1
+                                ON entity_email_address_1.email_address_id = email_address_1.id
+                        LEFT JOIN opportunity AS op
+                                ON account.id = op.account_id
+                    WHERE  account.deleted = '0'
+                    UNION
+                    SELECT c2.id,
+                        c2.codigo_de_cliente,
+                        c2.NAME as name,
+                        c2.direccion_de_facturacion,
+                        c2.empresa,
+                        c2.coordenadas_g_p_s,
+                        c2.r_i_f,
+                        c2.cedula,
+                        c2.created_at,
+                        c2.tipo_de_contacto,
+                        c2.first_name,
+                        c2.last_name,
+                        c2.direccion_tecnica,
+                        c2.num_admin,
+                        c2.num_tecnico,
+                        c2.m_pago,
+                        c2.admin_email,
+                        c2.tenico_email,
+                        c2.servicio,
+                        'Referido' AS apartado
+                    FROM   (SELECT r.id,
+                                r.NAME,
+                                r.codigo_de_cliente,
+                                c1.direccion_de_facturacion,
+                                c1.empresa,
+                                c1.coordenadas_g_p_s,
+                                c1.r_i_f,
+                                c1.cedula,
+                                c1.created_at,
+                                c1.tipo_de_contacto,
+                                c1.first_name,
+                                c1.last_name,
+                                c1.direccion_tecnica,
+                                c1.num_admin,
+                                c1.num_tecnico,
+                                c1.m_pago,
+                                c1.admin_email,
+                                c1.tenico_email,
+                                Concat(r.tipo_de_servicio, ' ', r.capacidad_de_servicio) AS
+                                servicio
+                            FROM   referido AS r
+                                INNER JOIN account_referido AS ar
+                                        ON r.id = ar.referido_id
+                                LEFT JOIN (SELECT account.id,
+                                                    account.direccion_de_facturacion,
+                                                    account.empresa,
+                                                    account.coordenadas_g_p_s,
+                                                    account.r_i_f,
+                                                    account.cedula,
+                                                    account.created_at,
+                                                    contact.tipo_de_contacto,
+                                                    contact.first_name,
+                                                    contact.last_name,
+                                                    contact.direccion_tecnica,
+                                                    phone_number.numeric   AS num_admin,
+                                                    phone_number_1.numeric AS num_tecnico,
+                                                    account.m_pago,
+                                                    email_address.lower    AS admin_email,
+                                                    email_address_1.lower  AS tenico_email
+                                            FROM   ((((((((account
+                                                            INNER JOIN account_contact
+                                                                    ON account.id =
+                                                                        account_contact.account_id)
+                                                            INNER JOIN contact
+                                                                    ON ( account_contact.account_id
+                                                                        =
+                                                                        contact.account_id )
+                                                                    AND (
+                                                            account_contact.contact_id =
+                                                            contact.id ))
+                                                        LEFT JOIN (entity_phone_number
+                                                                    LEFT JOIN phone_number
+                                                                            ON
+                        entity_phone_number.phone_number_id
+                        =
+                                                                    phone_number.id)
                                                                 ON account.id =
-                                                                    account_contact.account_id)
-                                                        INNER JOIN contact
-                                                                ON ( account_contact.account_id
-                                                                    =
-                                                                    contact.account_id )
-                                                                AND (
-                                                        account_contact.contact_id =
-                                                        contact.id ))
-                                                    LEFT JOIN (entity_phone_number
-                                                                LEFT JOIN phone_number
-                                                                        ON
-                    entity_phone_number.phone_number_id
-                    =
-                                                                phone_number.id)
-                                                            ON account.id =
-                    entity_phone_number.entity_id)
-                                                    INNER JOIN entity_phone_number AS
-                                                                entity_phone_number_1
-                                                            ON contact.id =
-                    entity_phone_number_1.entity_id)
-                                                    INNER JOIN phone_number AS phone_number_1
+                        entity_phone_number.entity_id)
+                                                        INNER JOIN entity_phone_number AS
+                                                                    entity_phone_number_1
+                                                                ON contact.id =
+                        entity_phone_number_1.entity_id)
+                                                        INNER JOIN phone_number AS phone_number_1
+                                                                ON
+                                                        entity_phone_number_1.phone_number_id =
+                                                        phone_number_1.id)
+                                                        INNER JOIN entity_email_address
+                                                                ON account.id =
+                        entity_email_address.entity_id)
+                                                    INNER JOIN email_address
                                                             ON
-                                                    entity_phone_number_1.phone_number_id =
-                                                    phone_number_1.id)
-                                                    INNER JOIN entity_email_address
-                                                            ON account.id =
-                    entity_email_address.entity_id)
-                                                INNER JOIN email_address
-                                                        ON
-                                                entity_email_address.email_address_id =
-                                                email_address.id)
-                                                INNER JOIN entity_email_address AS
-                                                            entity_email_address_1
-                                                        ON contact.id =
-                    entity_email_address_1.entity_id)
-                                                INNER JOIN email_address AS email_address_1
-                                                        ON
-                                                entity_email_address_1.email_address_id =
-                                                email_address_1.id
-                                        WHERE  account.deleted = '0') AS c1
-                                    ON ar.account_id = c1.id
-                        WHERE  r.deleted = 0) AS c2
+                                                    entity_email_address.email_address_id =
+                                                    email_address.id)
+                                                    INNER JOIN entity_email_address AS
+                                                                entity_email_address_1
+                                                            ON contact.id =
+                        entity_email_address_1.entity_id)
+                                                    INNER JOIN email_address AS email_address_1
+                                                            ON
+                                                    entity_email_address_1.email_address_id =
+                                                    email_address_1.id
+                                            WHERE  account.deleted = '0') AS c1
+                                        ON ar.account_id = c1.id
+                            WHERE  r.deleted = 0) AS c2
                 """
         return read_sql_query(query, self.c_engine)
 
